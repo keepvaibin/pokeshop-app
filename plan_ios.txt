@@ -1,0 +1,1139 @@
+================================================================================
+  POKESHOP iOS NATIVE APP — FULL PLANNING & SPECIFICATION DOCUMENT
+  Generated from complete audit of frontend, backend, and bot code
+  Target: Xcode / Swift development
+  Date: May 2026
+================================================================================
+
+This document is the iOS counterpart to plan_android.txt. It contains the same
+complete feature specification but adapted for iOS/Swift/SwiftUI conventions.
+All API endpoints, business logic, and design system details are identical —
+only the platform specifics differ. Read plan_android.txt for deeper coverage of
+features; this document focuses on iOS-specific implementations.
+
+The backend (Django REST API) is shared between both apps and is NOT modified
+as part of this iOS rewrite (except adding FCM/APNs push support later).
+
+================================================================================
+TABLE OF CONTENTS
+================================================================================
+ 1. Project Overview
+ 2. Recommended Tech Stack
+ 3. Project Folder Structure
+ 4. Backend API Configuration
+ 5. Authentication System (iOS specifics)
+ 6. Navigation Architecture
+ 7. Design System (Colors, Typography, Shapes)
+ 8. Dark / Light Mode
+ 9. Screen Specifications
+10. Admin vs Regular User — Role Differences
+11. Cart System
+12. Checkout Flow (multi-step)
+13. Trade-In System
+14. Timeslot / Pickup System
+15. Push Notifications (APNs)
+16. Purchase Limits
+17. Coupon System
+18. Image Handling
+19. State Management & Architecture
+20. Security Considerations
+21. API Endpoints Reference
+22. Data Models (Swift structs)
+23. Folder Structure
+24. iOS-Specific Notes
+
+================================================================================
+1. PROJECT OVERVIEW
+================================================================================
+
+Pokeshop is a TCG (Trading Card Game) shop serving primarily UCSC students.
+This is a native iOS app consuming the Django REST API backend.
+
+KEY FACTS (same as Android plan):
+- Auth: Google Sign-In (@ucsc.edu only) OR email+password with access code
+- Browse → Cart → Checkout → In-person pickup (no online payment)
+- Admin users see a completely different management interface
+- Trade-in system allows card-based store credit
+- Orders fulfilled at scheduled campus pickups or ASAP downtown meetups
+- No Stripe, no credit card processing
+
+App lives at: /app/ios/ in the pokeshop repo
+
+================================================================================
+2. RECOMMENDED TECH STACK
+================================================================================
+
+Language:           Swift 5.10+
+UI Framework:       SwiftUI
+Architecture:       MVVM + Repository (with Combine or async/await + @Observable)
+Navigation:         NavigationStack (iOS 16+) + TabView
+HTTP Client:        URLSession (native, with async/await) OR Alamofire
+JSON:               Swift Codable (JSONDecoder/JSONEncoder)
+Auth Token Storage: Keychain (via KeychainAccess package or native Security APIs)
+State Management:   @Observable (iOS 17+) or ObservableObject + @StateObject
+Image Loading:      SDWebImageSwiftUI or Nuke
+Push Notifications: APNs (Apple Push Notification service)
+Google Sign-In:     GoogleSignIn-iOS SDK
+Rich Text Display:  WKWebView for product descriptions (HTML)
+Image Compression:  UIImage / Core Graphics
+Paging:             Manual page tracking or AsyncSequence-based pagination
+Drag-and-Drop:      SwiftUI DragGesture + onDrop (or ForEach with .onMove)
+
+Deployment Target:  iOS 16.0+
+Xcode version:      16+
+Swift Package Manager for all dependencies
+
+================================================================================
+3. BACKEND API CONFIGURATION
+================================================================================
+
+Identical to Android plan. Base URL is configurable. Use Info.plist or a
+Config.xcconfig file:
+  API_BASE_URL = https://your-production-backend.com
+
+For local dev on a physical device:
+  - Use ngrok, a LAN IP, or deploy the backend to a cloud host
+  - Never use localhost on a physical iPhone
+
+JWT auth headers: "Authorization: Bearer <access_token>"
+Access tokens: 60-minute lifetime
+Refresh tokens: 7-day lifetime
+
+TOKEN REFRESH STRATEGY:
+  - Implement a URLSession wrapper or Alamofire interceptor that:
+    1. Detects 401 responses
+    2. Calls POST /api/token/refresh/ once
+    3. Updates stored tokens in Keychain
+    4. Retries the original request with the new token
+    5. If refresh fails: clear tokens, post notification to trigger logout
+
+RATE LIMITS:
+  Checkout: 10/hour — show user-friendly error: "Too many order attempts.
+  Please wait before trying again."
+
+================================================================================
+4. AUTHENTICATION SYSTEM (iOS Specifics)
+================================================================================
+
+--- 4.1 GOOGLE SIGN-IN ---
+Use the GoogleSignIn-iOS SDK (Swift Package Manager).
+Setup:
+  1. Add GoogleService-Info.plist to the Xcode project
+  2. Configure GIDConfiguration with the iOS client ID
+  3. In SceneDelegate/App, handle GIDSignIn.sharedInstance.handle(_ url:)
+     for the OAuth callback
+  4. Request the ID token scope
+  5. On success: POST /api/auth/google/ with { "token": idToken }
+  6. Store tokens in Keychain
+
+UCSC domain restriction: enforced server-side (backend checks hd="ucsc.edu").
+On client: if response is 400, show alert: "Only @ucsc.edu accounts supported."
+
+--- 4.2 EMAIL/PASSWORD LOGIN ---
+POST /api/auth/login/ (same as Android plan)
+
+--- 4.3 ACCESS CODE REGISTRATION ---
+Two-step flow (same as Android plan — see Section 9 Login screens)
+
+--- 4.4 TOKEN STORAGE IN KEYCHAIN ---
+Use KeychainAccess Swift package or Security framework directly.
+Keys:
+  "pokeshop_access_token"
+  "pokeshop_refresh_token"
+  "pokeshop_user_data"  (JSON-encoded cached User struct)
+
+On logout: delete all three keychain items.
+On app cold start: read tokens from Keychain, validate, refresh if expired.
+
+--- 4.5 USER DATA STRUCTURE ---
+Identical to Android plan. is_admin = true triggers admin UI.
+
+--- 4.6 DISCORD LINKING ---
+Use ASWebAuthenticationSession (iOS) to open the Discord OAuth URL.
+The callback URL scheme: pokeshop://discord/callback
+Register this scheme in Info.plist.
+Parse the ?status= query param from the callback URL.
+
+================================================================================
+5. NAVIGATION ARCHITECTURE
+================================================================================
+
+Use a root TabView with NavigationStack inside each tab.
+
+TABS (Regular User):
+  Tab 0: Home            (house.fill)
+  Tab 1: Shop            (bag.fill)
+  Tab 2: Cart            (cart.fill + badge for count)
+  Tab 3: Orders          (list.bullet.rectangle)
+  Tab 4: Profile         (person.fill)
+
+TABS (Admin User):
+  Tab 0: Dashboard       (square.grid.2x2.fill)
+  Tab 1: Shop            (bag.fill)
+  Tab 2: Cart            (cart.fill + badge)
+  Tab 3: Dispatch        (bolt.fill)
+  Tab 4: Admin Menu      (wrench.and.screwdriver.fill)
+
+Each tab uses NavigationStack for push navigation.
+Modally presented: checkout wizard, bottom sheets (use .sheet modifier),
+product quick view, filter panel.
+
+Deep link handling:
+  pokeshop://order/{orderId}  → navigate to Order Detail
+  pokeshop://discord/callback → handle Discord OAuth
+
+================================================================================
+6. DESIGN SYSTEM
+================================================================================
+
+--- 6.1 COLORS ---
+Define in Assets.xcassets as named color sets with dark mode variants.
+Or define in a Color extension in Swift.
+
+Primary Blue:        #0054A6    (dark: #4D9FE0)
+Primary Blue Dark:   #003087    (dark: #3A8CD1)
+Primary Blue Light:  #D9E9F7    (dark: #1A3A5C)
+Yellow Accent:       #FDB71D    (same in dark)
+Yellow Dark:         #EF970B    (same in dark)
+Red Danger:          #D91215    (dark: #FF4444)
+Red Dark:            #C00B10    (dark: #E03333)
+Background:          #F0F0F0    (dark: #121212)
+Surface:             #FFFFFF    (dark: #1E1E1E)
+Surface Variant:     #F5F5F5    (dark: #2C2C2C)
+Text Primary:        #000000    (dark: #FFFFFF)
+Text Secondary:      #4D4D4D    (dark: #CCCCCC)
+Text Muted:          #767676    (dark: #888888)
+Border:              #E9E9E9    (dark: #333333)
+Border Mid:          #CBCBCB    (dark: #444444)
+Disabled:            #CDCDCD    (dark: #555555)
+
+Usage in Swift:
+  extension Color {
+    static let pkmnBlue = Color("PkmnBlue")        // from assets
+    static let pkmnYellow = Color("PkmnYellow")
+    // etc.
+  }
+
+Or hardcode inline if not supporting dark mode initially:
+  static let pkmnBlue = Color(hex: "0054A6")
+
+--- 6.2 TYPOGRAPHY ---
+Montserrat: headings, buttons, labels (font-weight: .bold / .semibold)
+Open Sans: body text, descriptions (font-weight: .regular)
+
+Load via custom fonts in Info.plist (UIAppFonts key).
+Add both font .ttf files to the project under Resources/Fonts/.
+
+Define in a Typography extension:
+  extension Font {
+    static let pkmnHeadingLg = Font.custom("Montserrat-Bold", size: 20)
+    static let pkmnHeadingMd = Font.custom("Montserrat-Bold", size: 16)
+    static let pkmnHeadingSm = Font.custom("Montserrat-Bold", size: 13)
+    static let pkmnButton = Font.custom("Montserrat-Bold", size: 12)
+    static let pkmnBody = Font.custom("OpenSans-Regular", size: 14)
+    static let pkmnBodySm = Font.custom("OpenSans-Regular", size: 12)
+    static let pkmnPrice = Font.custom("Montserrat-Bold", size: 18)
+  }
+
+Buttons: ALL CAPS + 0.08rem letter spacing (use .textCase(.uppercase) +
+.tracking() in SwiftUI, or kerning in AttributedString).
+
+--- 6.3 SHAPES & STYLE ---
+ZERO corner radius (match Pokémon Center site aesthetic).
+Use .cornerRadius(0) or a custom RoundedRectangle(cornerRadius: 0) shape.
+Exception: circular Pokemon icons use Circle() clip shape.
+
+Card style:
+  .background(.white)
+  .overlay(Rectangle().stroke(Color.pkmnBorder, lineWidth: 1))
+  .shadow(color: .black.opacity(0.08), radius: 1, x: 0, y: 1)
+
+Button style:
+  Custom ButtonStyle structs: PrimaryButtonStyle, SecondaryButtonStyle,
+  AccentButtonStyle, DestructiveButtonStyle
+
+Input style:
+  TextFieldStyle with border, no corner radius, focus ring in blue
+
+================================================================================
+7. DARK / LIGHT MODE
+================================================================================
+
+Same philosophy as Android plan. The web app is light-only; implement both
+modes for iOS since iOS users expect it strongly (especially dark mode).
+
+Use @Environment(\.colorScheme) to check current mode.
+Use Assets.xcassets color sets with "Any Appearance" and "Dark" variants.
+
+System mode by default (follows iOS system setting).
+Override option in Settings → Appearance:
+  @AppStorage("appColorScheme") var colorScheme: String = "system"
+  Switch between system/light/dark by setting preferredColorScheme on the
+  root WindowGroup.
+
+================================================================================
+8. SCREEN SPECIFICATIONS
+================================================================================
+
+The feature logic for every screen is identical to the Android plan (Section 8).
+Below are iOS-specific implementation notes for each major screen.
+
+==========================================================
+SPLASH / LOADING SCREEN
+==========================================================
+Use a custom LaunchScreen.storyboard for the brief system launch.
+Then in the app, show a simple loading view while auth state is resolved:
+  - ZStack with blue background
+  - ProgressView or custom animation in center
+  - Use async Task in App init to validate tokens before showing main content
+
+==========================================================
+LOGIN SCREEN
+==========================================================
+- Google Sign-In: use GIDSignIn.sharedInstance.signIn(withPresenting:)
+  The presenting view controller is obtained via UIApplication.shared.
+- Email/password: two TextField + SecureField; validate before calling API
+- Show loading state: ProgressView overlay on form
+- Alerts for errors: .alert() modifier
+
+==========================================================
+HOME SCREEN
+==========================================================
+SwiftUI ScrollView + LazyVStack
+  AnnouncementBanner: if settings.store_announcement not empty
+  Hero banner: AsyncImage loading from URL
+  Promo "Free Delivery" bar (blue)
+  ForEach CMS sections → horizontal ScrollView for CAROUSEL type
+  ProductCard in LazyHStack (horizontal scroll) or LazyVGrid (grid)
+  Pull-to-refresh: .refreshable { await viewModel.refresh() }
+
+==========================================================
+SHOP / PRODUCT LIST
+==========================================================
+NavigationStack destination with:
+  - Toolbar: title + filter button + sort button
+  - LazyVGrid with 2 columns (adaptiveSize or fixed)
+  - Pagination: load more when last item appears (onAppear of last cell)
+  - Filter sheet: .sheet() presenting FilterView
+  - Sort: confirmationDialog or Menu with sort options
+
+FilterView (sheet):
+  - Price range: two-thumb slider (use RangeSlider from a Swift package or
+    implement custom with DragGesture)
+  - Category, type, stage, rarity, supertype: segmented controls or Pickers
+  - Set name, artist: searchable Picker
+  - Apply / Clear buttons
+
+==========================================================
+PRODUCT DETAIL
+==========================================================
+ScrollView with:
+  - TabView(.page) for image gallery (swipeable)
+  - Thumbnail strip below using HStack
+  - Pinch-to-zoom: use a UIViewRepresentable wrapping UIScrollView, or a
+    custom magnification gesture with @GestureState
+  - Product info: title, price, badges, metadata grid
+  - HTML description: WKWebView wrapped in UIViewRepresentable
+    IMPORTANT: inject CSS into the WKWebView to match app fonts and colors
+  - Scheduled drops (if any)
+  - Sticky bottom add-to-cart bar: use .safeAreaInset(edge: .bottom)
+
+==========================================================
+PRODUCT QUICK VIEW SHEET
+==========================================================
+.sheet(isPresented:) presenting a modal view.
+Or use .presentationDetents([.medium, .large]) for adjustable sheet height.
+Content: image gallery, info, quantity stepper, add-to-cart button.
+
+==========================================================
+CART
+==========================================================
+List { ForEach(cartItems) { item in CartRowView(item) } }
+  - Swipe-to-delete: .swipeActions { Button("Delete") {} }
+  - Quantity stepper: Stepper or custom ± buttons
+Order Summary: below the list, or in a footer
+[Checkout] button: full-width, .pkmnBlue background
+Empty state: VStack with message + Shop button
+
+==========================================================
+CHECKOUT (Multi-Step)
+==========================================================
+Implement as a NavigationStack-based multi-screen flow, or as a single screen
+with a TabView(.page) locked to non-swipeable, driven by a step counter.
+
+Recommended: push each step as a NavigationStack destination.
+A CheckoutCoordinator ViewModel holds the entire checkout state:
+  cartItems, deliveryMethod, selectedTimeslot, paymentMethod,
+  tradeCards, couponCode, mergeOrderId
+
+Step transitions: NavigationLink or programmatic push via navigationPath.
+
+  Step 1: Cart Review → NavigationLink → Step 2
+  Step 2: Delivery Method → push Step 3 or 4 based on choice
+  Step 3: Timeslot Picker → push Step 4
+  Step 4: Payment Method → push Step 5 (if trade) or Step 6
+  Step 5: Trade Cards → push Step 6
+  Step 6: Coupon → push Step 7
+  Step 7: Review & Place Order → push Success screen
+
+Checkout Success: NavigationStack replace to clear back stack (or use
+  NavigationPath().removeLast(n) to pop all intermediates)
+
+Confetti animation on success: use a Swift confetti package (e.g.,
+  ConfettiSwiftUI by simibac) or Core Animation particle emitter.
+
+==========================================================
+TIMESLOT PICKER
+==========================================================
+Group recurring timeslots by next occurrence dates.
+Section header: formatted date (e.g., "Monday, May 18")
+Chips in a FlowLayout (or wrapped HStack using ViewThatFits):
+  Each chip: "2:00 – 4:00 PM · Porter Quad · 3 left"
+  Tapped: fill blue, store selection
+  Full (capacity): gray, .disabled(true)
+
+Min 2 days advance: filter out dates < Date().addingTimeInterval(2*86400)
+OOO: filter out dates before ooo_until
+
+==========================================================
+ORDERS LIST
+==========================================================
+List with pagination.
+  .searchable(text: $searchQuery) for inline search
+  Picker or custom filter chips row for status filter
+  Each row: NavigationLink to OrderDetailView
+  Pull-to-refresh: .refreshable {}
+
+==========================================================
+ORDER DETAIL
+==========================================================
+ScrollView with sections:
+  StatusCard (border color matches status)
+  Timeline (vertical line with dots; each event = Text + date)
+  Items list
+  Payment & pickup info
+  Trade cards (if applicable)
+  Action buttons
+
+Counteroffer: Alert or modal sheet with message + accept/decline buttons
+  Timer countdown: use Timer.publish + onReceive for live countdown
+
+==========================================================
+SETTINGS / PROFILE
+==========================================================
+Form {
+  Section("Profile") { profile photo, name fields }
+  Section("Pokémon Icon") { current icon + change button }
+  Section("Discord") { link/unlink }
+  Section("Strikes") { visible only if strike_count > 0 }
+  Section("Appearance") { Picker for light/dark/system }
+  Section("Account") { sign out button }
+}
+
+.navigationTitle("Settings")
+Save button in toolbar for profile changes.
+
+==========================================================
+POKEMON ICON PICKER
+==========================================================
+NavigationStack push or full-screen .sheet
+  .searchable for name filter
+  Picker/segment for region filter
+  LazyVGrid (5 columns) of circular sprite images
+  Tap to select: blue ring border
+  Toolbar "Done" button: PATCH profile + dismiss
+
+==========================================================
+ADMIN SCREENS
+==========================================================
+All admin screens use the same design system. Key iOS-specific notes:
+
+DISPATCH (Trades tab):
+  ForEach orders in List
+  Each order expandable (DisclosureGroup) to show trade cards
+  Per-card Accept/Reject: button row inline
+  Counteroffer: sheet with TextEditor + DatePicker
+
+INVENTORY MANAGEMENT:
+  List of items with swipe-to-delete, tap-to-edit
+  Edit screen: Form with sections matching Android plan
+  TCG Search: .searchable or custom search sheet
+  Rich text editor: WKWebView with Quill loaded from local HTML file
+    (bundle a minimal quill-editor HTML in the app's Resources)
+  Drag-to-reorder images: List with .onMove(perform:)
+  Image picker: PhotosUI PHPickerViewController wrapped in UIViewRepresentable
+
+ADMIN SETTINGS:
+  Form layout (same as user Settings, more sections)
+  UnsavedChangesBar: .safeAreaInset(edge: .bottom) toolbar showing save/discard
+    Appears whenever any field differs from the fetched settings
+
+TIMESLOT MANAGEMENT (within Admin Settings):
+  List of recurring timeslots
+  Sheet for add/edit: day picker, time pickers (DatePicker component=.hourAndMinute)
+  Delete: swipe action
+
+WANTED CARDS:
+  PhotosUI picker for image upload
+  TCG card search sheet (reusable component)
+
+================================================================================
+9. TRADE-IN SYSTEM (iOS Specifics)
+================================================================================
+
+Same business logic as Android plan. iOS implementation notes:
+
+Trade card photo: PHPickerViewController (iOS 14+) wrapped in UIViewRepresentable
+  Compress with: UIImage(data:) → UIImage.jpegData(compressionQuality: 0.7)
+  Ensure result is < 2MB before upload.
+
+Upload as multipart/form-data using URLRequest with a custom boundary.
+Or use Alamofire's .upload(multipartFormData:) which is simpler.
+
+Wanted card matching: after fetching GET /api/inventory/wanted/, check client-side
+if the trade card name contains any wanted card name (case-insensitive substring
+match). Show a star badge if matched.
+
+================================================================================
+10. PUSH NOTIFICATIONS (APNs)
+================================================================================
+
+iOS uses APNs (Apple Push Notification service) instead of FCM.
+However, you CAN use Firebase Cloud Messaging on iOS too — Firebase SDK supports
+both APNs and FCM under the hood, and the backend only needs to deal with FCM
+tokens. This is the recommended approach for a shared backend.
+
+With Firebase iOS SDK:
+  1. Import FirebaseMessaging
+  2. Register for remote notifications in AppDelegate:
+     UNUserNotificationCenter.current().requestAuthorization(...)
+     application.registerForRemoteNotifications()
+  3. Implement UNUserNotificationCenterDelegate
+  4. Get FCM token: Messaging.messaging().token(completion:)
+  5. PATCH /api/auth/profile/ with { "fcm_token": "..." }
+  6. On notification arrival: handle userInfo payload to extract orderId
+  7. Navigate to Order Detail on notification tap via UNNotificationResponse
+
+Notification types (same as Android plan):
+  ORDER_PLACED, TRADE_UNDER_REVIEW, TRADE_APPROVED, TRADE_REJECTED,
+  COUNTEROFFER, ORDER_FULFILLED, ORDER_CANCELLED, RESCHEDULE_NEEDED, REMINDER
+
+BACKGROUND NOTIFICATIONS:
+  Set content-available=1 for silent background data updates.
+  Sync cart state on app return from background via applicationWillEnterForeground.
+
+================================================================================
+11. STATE MANAGEMENT & ARCHITECTURE
+================================================================================
+
+Use @Observable (iOS 17+) or ObservableObject (iOS 16) for ViewModels.
+
+Pattern:
+  @Observable class HomeViewModel {
+    var sections: [HomepageSection] = []
+    var isLoading = false
+    var error: String? = nil
+    
+    func loadData() async {
+      isLoading = true
+      // ...call repository...
+      isLoading = false
+    }
+  }
+
+In SwiftUI views:
+  @State private var viewModel = HomeViewModel()
+  // or with Environment for shared VMs:
+  @Environment(AuthViewModel.self) var auth
+
+GLOBAL SHARED STATE:
+  AuthViewModel: manages login state, tokens, current user
+    Injected via .environment() at root
+  CartViewModel: manages cart items, item count badge
+    Injected via .environment() at root
+
+TokenRefresh interceptor: implement as a custom URLProtocol subclass or
+  wrap URLSession calls in a helper that detects 401 and refreshes.
+
+================================================================================
+12. SECURITY CONSIDERATIONS (iOS Specifics)
+================================================================================
+
+1. KEYCHAIN: Store all tokens in Keychain with:
+     kSecAttrAccessible = kSecAttrAccessibleWhenUnlocked
+   Never store tokens in UserDefaults.
+
+2. TRANSPORT SECURITY: Ensure NSAppTransportSecurity in Info.plist allows
+   only HTTPS in production. Allow HTTP only for localhost during development
+   (NSExceptionDomains for localhost).
+
+3. SSL PINNING: Use TrustKit or URLSession serverTrust challenge handling
+   to pin the production backend certificate.
+
+4. DEEPLINKS: Validate all inbound deeplink parameters. Malicious apps can
+   invoke your custom URL scheme. Validate the Discord OAuth state parameter.
+
+5. JAILBREAK DETECTION: Optional. IOSSecuritySuite package can detect jailbroken
+   devices. Consider whether to restrict app features on jailbroken devices
+   (tokens are at higher risk).
+
+6. FACE ID / TOUCH ID: Optionally require biometric re-auth when opening the
+   app after a period of inactivity (use LAContext).
+
+7. SCREENSHOT PREVENTION for sensitive screens (checkout, order details):
+   Set window.layer.allowsGroupOpacity = false in UIWindowSceneDelegate.
+   Or use .onAppear/.onDisappear to blur the content when app goes to background.
+
+================================================================================
+13. IMAGE HANDLING (iOS Specifics)
+================================================================================
+
+Use SDWebImageSwiftUI (AsyncImage is built-in on iOS 15+ but SDWebImage has
+better caching and progressive loading).
+
+Product images: AsyncImage or SDWebImageSwiftUI WebImage
+  placeholder: Rectangle().fill(Color.pkmnBg).shimmering() (using a shimmer pkg)
+  failure: Image(systemName: "photo") tinted gray
+
+Trade card photo upload:
+  PHPickerViewController (system photo picker, no permission needed for photos)
+  For camera: AVFoundation with UIImagePickerController
+  Compress with UIImage.jpegData(compressionQuality: 0.7)
+  Show UIProgressView or ProgressView during upload
+
+Banner images: full-width, maintaining aspect ratio (GeometryReader or
+  .aspectRatio(contentMode: .fill) + .clipped())
+
+================================================================================
+14. DATA MODELS (Swift Structs)
+================================================================================
+
+These are representative Codable structs. Implement all of them.
+
+struct User: Codable, Identifiable {
+  let id: Int
+  let email: String
+  let username: String
+  let isAdmin: Bool
+  let firstName: String
+  let lastName: String
+  let nickname: String?
+  let discordId: String?
+  let discordHandle: String?
+  let pokemonIcon: PokemonIcon?
+  let strikeCount: Int
+  let isRestricted: Bool
+  
+  enum CodingKeys: String, CodingKey {
+    case id, email, username
+    case isAdmin = "is_admin"
+    case firstName = "first_name"
+    case lastName = "last_name"
+    case nickname
+    case discordId = "discord_id"
+    case discordHandle = "discord_handle"
+    case pokemonIcon = "pokemon_icon"
+    case strikeCount = "strike_count"
+    case isRestricted = "is_restricted"
+  }
+}
+
+struct PokemonIcon: Codable {
+  let pokedexNumber: Int
+  let filename: String
+  let displayName: String
+  let region: String
+  // CodingKeys: pokedex_number, filename, display_name, region
+}
+
+struct Item: Codable, Identifiable {
+  let id: Int
+  let title: String
+  let slug: String
+  let description: String?
+  let shortDescription: String?
+  let price: Decimal
+  let imagePath: String?
+  let images: [ItemImage]
+  let stock: Int
+  let maxPerUser: Int?
+  let maxPerWeek: Int?
+  let maxTotalPerUser: Int?
+  let isActive: Bool
+  let publishedAt: Date?
+  let tcgSetName: String?
+  let rarity: String?
+  let rarityType: String?
+  let isHolofoil: Bool
+  let cardNumber: String?
+  let tcgType: String?
+  let tcgStage: String?
+  let tcgSupertype: String?
+  let tcgHp: String?
+  let tcgArtist: String?
+  let tcgSetReleaseDate: String?
+  let category: Category?
+  let subcategory: SubCategory?
+  let tags: [ItemTag]
+  let scheduledDrops: [ScheduledDrop]
+  // CodingKeys: snake_case variants
+}
+
+struct ItemImage: Codable, Identifiable {
+  let id: Int
+  let image: String     // URL string
+  let position: Int
+}
+
+struct ScheduledDrop: Codable, Identifiable {
+  let id: Int
+  let quantity: Int
+  let dropTime: Date
+  let isProcessed: Bool
+  // CodingKeys: drop_time, is_processed
+}
+
+struct Category: Codable, Identifiable {
+  let id: Int
+  let name: String
+  let slug: String
+  let imageUrl: String?
+  let isActive: Bool
+  let isCore: Bool
+  // CodingKeys: image_url, is_active, is_core
+}
+
+struct SubCategory: Codable, Identifiable {
+  let id: Int
+  let name: String
+  let slug: String
+  let isActive: Bool
+  // CodingKeys: is_active
+}
+
+struct ItemTag: Codable, Identifiable {
+  let id: Int
+  let name: String
+  let slug: String
+}
+
+struct Order: Codable, Identifiable {
+  let id: UUID           // from order_id field
+  let user: Int
+  let paymentMethod: String
+  let deliveryMethod: String
+  let status: OrderStatus
+  let discordHandle: String?
+  let createdAt: Date
+  let updatedAt: Date
+  let items: [OrderItem]
+  let tradeOffer: TradeOffer?
+  let pickupDate: String?
+  let recurringTimeslot: RecurringTimeslot?
+  let couponCode: String?
+  let discountApplied: Decimal?
+  let requiresRescheduling: Bool
+  let rescheduleDeadline: Date?
+  let counterofferMessage: String?
+  let counterofferExpiresAt: Date?
+  let resolutionSummary: [[String: AnyCodable]]?
+  let tradeOverage: Decimal?
+  // CodingKeys: order_id, payment_method, delivery_method, created_at, etc.
+}
+
+enum OrderStatus: String, Codable {
+  case pending
+  case fulfilled
+  case cancelled
+  case cashNeeded = "cash_needed"
+  case tradeReview = "trade_review"
+  case pendingCounteroffer = "pending_counteroffer"
+  
+  var displayName: String {
+    switch self {
+    case .pending: return "Pending"
+    case .fulfilled: return "Fulfilled"
+    case .cancelled: return "Cancelled"
+    case .cashNeeded: return "Cash Needed"
+    case .tradeReview: return "Trade Review"
+    case .pendingCounteroffer: return "Counteroffer Pending"
+    }
+  }
+  
+  var color: Color {
+    switch self {
+    case .pending: return .pkmnBlue
+    case .fulfilled: return .green
+    case .cancelled: return .pkmnRed
+    case .cashNeeded: return .pkmnYellow
+    case .tradeReview, .pendingCounteroffer: return .orange
+    }
+  }
+}
+
+struct OrderItem: Codable, Identifiable {
+  let id: Int
+  let item: Item
+  let quantity: Int
+  let priceAtPurchase: Decimal
+  // CodingKeys: price_at_purchase
+}
+
+struct TradeOffer: Codable {
+  let totalCredit: Decimal
+  let creditPercentage: Decimal
+  let tradeMode: String
+  let cards: [TradeCardItem]
+  // CodingKeys: total_credit, credit_percentage, trade_mode
+}
+
+struct TradeCardItem: Codable, Identifiable {
+  let id: Int
+  let cardName: String
+  let estimatedValue: Decimal
+  let condition: String
+  let rarity: String?
+  let photoUrl: String?
+  let isWantedCard: Bool
+  let approved: Bool?
+  let isAccepted: Bool?
+  let baseMarketPrice: Decimal?
+  let tcgProductId: Int?
+  // CodingKeys: card_name, estimated_value, is_wanted_card, is_accepted,
+  //             base_market_price, tcg_product_id, photo (URL)
+}
+
+struct CartItem: Codable, Identifiable {
+  let id: Int
+  let item: Item
+  let quantity: Int
+}
+
+struct StoreSettings: Codable {
+  let tradeCreditPercentage: Decimal
+  let storeAnnouncement: String
+  let showFooterNewsletter: Bool
+  let maxTradeCardsPerOrder: Int
+  let discordWebhookUrl: String?
+  let isOoo: Bool
+  let oooUntil: String?
+  let ordersDisabled: Bool
+  let payVenmoEnabled: Bool
+  let payZelleEnabled: Bool
+  let payPaypalEnabled: Bool
+  let payCashEnabled: Bool
+  let payTradeEnabled: Bool
+  // CodingKeys: trade_credit_percentage, store_announcement, etc.
+}
+
+struct RecurringTimeslot: Codable, Identifiable {
+  let id: Int
+  let dayOfWeek: Int     // 0=Monday, 6=Sunday
+  let startTime: String  // "HH:mm:ss"
+  let endTime: String
+  let location: String
+  let maxBookings: Int
+  let isActive: Bool
+  // CodingKeys: day_of_week, start_time, end_time, max_bookings, is_active
+  
+  var dayName: String {
+    ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"][dayOfWeek]
+  }
+}
+
+struct WantedCard: Codable, Identifiable {
+  let id: Int
+  let name: String
+  let slug: String
+  let description: String?
+  let estimatedValue: Decimal
+  let isActive: Bool
+  let imageUrl: String?
+  // CodingKeys: estimated_value, is_active, image_url (from WantedCardImage)
+}
+
+struct Coupon: Codable, Identifiable {
+  let id: Int
+  let code: String
+  let discountAmount: Decimal?
+  let discountPercent: Decimal?
+  let usageLimit: Int
+  let timesUsed: Int
+  let expiresAt: Date?
+  let isActive: Bool
+  let requiresCashOnly: Bool
+  // CodingKeys: discount_amount, discount_percent, usage_limit, etc.
+}
+
+struct TCGSearchResult: Codable, Identifiable {
+  let productId: Int
+  let name: String
+  let setName: String?
+  let rarity: String?
+  let marketPrice: Decimal?
+  let imageUrl: String?
+  let subTypeName: String?
+  // CodingKeys: product_id, set_name, market_price, image_url, sub_type_name
+}
+
+struct HomepageSection: Codable, Identifiable {
+  let id: Int
+  let title: String
+  let sectionType: String   // CAROUSEL | HERO | GRID
+  let positionOrder: Int
+  let isActive: Bool
+  let items: [Item]
+  let banners: [PromoBanner]
+  // CodingKeys: section_type, position_order, is_active
+}
+
+struct PromoBanner: Codable, Identifiable {
+  let id: Int
+  let title: String
+  let subtitle: String?
+  let imageUrl: String?
+  let displayImageUrl: String?
+  let linkUrl: String
+  let size: String          // FULL | HALF | QUARTER
+  let positionOrder: Int
+  let isActive: Bool
+  // CodingKeys: image_url, display_image_url, link_url, etc.
+}
+
+// Paginated response wrapper (many endpoints use this):
+struct PaginatedResponse<T: Codable>: Codable {
+  let count: Int
+  let next: String?
+  let previous: String?
+  let results: [T]
+}
+
+================================================================================
+15. FOLDER STRUCTURE (Xcode Project)
+================================================================================
+
+app/ios/
+├── Pokeshop.xcodeproj
+├── Pokeshop/
+│   ├── PokeshopApp.swift              (App entry, @main, Firebase init)
+│   ├── AppDelegate.swift              (push notification setup, Google Sign-In)
+│   ├── ContentView.swift              (root TabView or auth gate)
+│   ├── Config/
+│   │   └── Config.xcconfig            (API_BASE_URL per scheme)
+│   ├── Data/
+│   │   ├── Network/
+│   │   │   ├── APIClient.swift        (URLSession wrapper, auth header, refresh)
+│   │   │   ├── Endpoints.swift        (enum of all API paths)
+│   │   │   └── NetworkError.swift
+│   │   ├── Models/                    (all Codable structs, as defined above)
+│   │   │   ├── User.swift
+│   │   │   ├── Item.swift
+│   │   │   ├── Order.swift
+│   │   │   ├── Cart.swift
+│   │   │   ├── TradeOffer.swift
+│   │   │   ├── Timeslot.swift
+│   │   │   ├── StoreSettings.swift
+│   │   │   └── ...
+│   │   ├── Repositories/
+│   │   │   ├── AuthRepository.swift
+│   │   │   ├── InventoryRepository.swift
+│   │   │   ├── OrderRepository.swift
+│   │   │   └── CartRepository.swift
+│   │   └── Local/
+│   │       ├── TokenStorage.swift     (Keychain wrapper)
+│   │       └── PreferencesStorage.swift (UserDefaults / AppStorage)
+│   ├── Domain/
+│   │   └── (optional use case objects)
+│   ├── UI/
+│   │   ├── Theme/
+│   │   │   ├── Color+Extensions.swift
+│   │   │   ├── Font+Extensions.swift
+│   │   │   └── ButtonStyles.swift
+│   │   ├── Navigation/
+│   │   │   └── AppNavigator.swift     (NavigationPath coordinator)
+│   │   ├── Components/               (reusable SwiftUI views)
+│   │   │   ├── ProductCard.swift
+│   │   │   ├── StatusBadge.swift
+│   │   │   ├── LoadingOverlay.swift
+│   │   │   ├── ShimmerView.swift
+│   │   │   ├── PrimaryButton.swift
+│   │   │   └── ...
+│   │   ├── Screens/
+│   │   │   ├── Auth/
+│   │   │   │   ├── LoginView.swift
+│   │   │   │   ├── LoginViewModel.swift
+│   │   │   │   ├── RegisterStep1View.swift
+│   │   │   │   └── RegisterStep2View.swift
+│   │   │   ├── Home/
+│   │   │   ├── Shop/
+│   │   │   ├── Product/
+│   │   │   ├── Cart/
+│   │   │   ├── Checkout/
+│   │   │   ├── Orders/
+│   │   │   ├── Settings/
+│   │   │   └── Admin/
+│   │   │       ├── Dashboard/
+│   │   │       ├── Dispatch/
+│   │   │       ├── Inventory/
+│   │   │       ├── Categories/
+│   │   │       ├── Promos/
+│   │   │       ├── Coupons/
+│   │   │       ├── AccessCodes/
+│   │   │       ├── Strikes/
+│   │   │       ├── WantedCards/
+│   │   │       └── AdminSettings/
+│   │   └── ViewModels/               (shared VMs if not collocated)
+│   └── Resources/
+│       ├── Fonts/                     (Montserrat-Bold.ttf, OpenSans-Regular.ttf, etc.)
+│       ├── Assets.xcassets            (color sets, images, icons)
+│       └── quill-editor.html          (minimal Quill HTML for admin text editing)
+├── PokeshopTests/
+└── PokeshopUITests/
+
+================================================================================
+16. iOS-SPECIFIC NOTES & DIFFERENCES FROM ANDROID PLAN
+================================================================================
+
+1. SAFE AREA: Always use .ignoresSafeArea(.keyboard) on scrolling content and
+   respect the iOS safe area insets for bottom navigation. Use .safeAreaInset()
+   for the sticky add-to-cart bar and checkout bottom actions.
+
+2. KEYBOARD AVOIDANCE: SwiftUI handles this with ScrollView + .ignoresSafeArea(.keyboard).
+   For Forms, use Form {} which auto-scrolls. For custom layouts, wrap in a
+   ScrollView with .keyboardAdaptive() modifier.
+
+3. HAPTICS: Add light haptic feedback on button taps:
+   UIImpactFeedbackGenerator(style: .light).impactOccurred()
+   On success actions (add to cart, place order): .success style.
+   On errors: .error style (UINotificationFeedbackGenerator).
+
+4. SWIPE GESTURES: iOS users expect swipe-back navigation. NavigationStack
+   provides this automatically. Do not disable the swipe gesture.
+
+5. CONTEXT MENUS: Long-press on product cards → context menu with options:
+   "Quick View", "Add to Cart", "View Details"
+   Use .contextMenu { } modifier on ProductCard.
+
+6. SHARE SHEET: On Product Detail, add a share button (toolbar) that opens
+   UIActivityViewController with a link to the web shop URL for that product.
+
+7. PHOTOS: Use PHPickerViewController (iOS 14+, no separate permission needed
+   for photos selected from picker). For camera: request NSCameraUsageDescription.
+
+8. FACE ID: Add NSFaceIDUsageDescription if implementing biometric unlock.
+
+9. APP CLIP (Optional Future): A lightweight App Clip could let users view their
+   order status by tapping an NFC tag or scanning a QR code at pickup.
+
+10. WIDGET (Optional Future): A home screen widget showing cart item count or
+    next pickup time would be useful for returning customers.
+
+11. BACKGROUND TASKS: Use BGAppRefreshTask to periodically check order status
+    and update local state (e.g., if an order transitions from pending_counteroffer
+    to a new status while the app is backgrounded).
+
+12. ACCESSIBILITY:
+    - Use .accessibilityLabel() on all icon-only buttons
+    - ProductCard: accessibilityElement(children: .combine)
+    - Status badges: use .accessibilityValue() for color-coded status
+    - VoiceOver: test all critical flows
+    - Dynamic Type: use .font(.custom(..., size:, relativeTo:)) with relativeTo
+      for text scaling support
+
+13. LOCALIZATION: Currently English only. Structure for future localization:
+    - Use LocalizedStringKey throughout (no hardcoded strings in views)
+    - NSLocalizedString in non-SwiftUI code
+    - Keep en.lproj/Localizable.strings
+
+14. iPAD SUPPORT (Optional):
+    - Use adaptiveSize layout for LazyVGrid (3 or 4 columns on iPad)
+    - Consider a sidebar NavigationSplitView for iPad admin screens
+    - The app can run on iPad as-is with iPhone layout; iPad-optimized layout
+      is a nice-to-have
+
+15. TESTFLIGHT DISTRIBUTION:
+    - Archive and upload via Xcode Organizer
+    - Configure App Store Connect for internal testing first
+    - The admin Google Sign-In will need the iOS bundle ID registered in
+      Google Cloud Console
+
+================================================================================
+17. ADMIN VS REGULAR USER DIFFERENCES (SUMMARY)
+================================================================================
+
+The is_admin flag on the User model controls everything. Check it on every
+app launch and after any profile refresh.
+
+REGULAR USER sees:
+  - Home (storefront with products/banners)
+  - Shop, Search, Product Detail, Cart, Checkout, Orders, Settings
+  - Order detail: own orders only; can cancel/reschedule/respond to counteroffer
+  - NO access to any /admin/ routes or admin API endpoints
+
+ADMIN USER sees:
+  - Home toggle: "Storefront View" ↔ "Admin View"
+  - In Admin View: dashboard with stats, shortcuts
+  - Extra tab: Dispatch (order fulfillment)
+  - Extra tab/menu: Admin Menu → Inventory, Categories, Promos, Wanted,
+    Order History, Coupons, Access Codes, Strikes, Settings
+  - Order detail: can view ANY order, not just their own
+  - Cart/Shop still available for admin to browse as a customer
+
+VISUALLY:
+  - Admin toolbar items (edit icons, admin badges) should only render when
+    isAdmin is true. Use guard/if let across ViewModels.
+  - Never expose admin API call methods from admin-only repositories to
+    regular-user screens. Enforce at the repository layer.
+
+================================================================================
+18. API ENDPOINTS REFERENCE
+================================================================================
+
+(Identical to Android plan Section 17. Refer to plan_android.txt for the
+complete endpoint list with HTTP methods, paths, and auth requirements.)
+
+All endpoints use:
+  Authorization: Bearer <access_token>
+
+JSON Content-Type for all requests except multipart uploads.
+Decode all Date fields with ISO 8601 format:
+  let decoder = JSONDecoder()
+  decoder.dateDecodingStrategy = .iso8601
+  decoder.keyDecodingStrategy = .convertFromSnakeCase  // simplifies CodingKeys
+
+================================================================================
+19. CHECKOUT FLOW — iOS-SPECIFIC UX NOTES
+================================================================================
+
+The checkout wizard should feel native to iOS:
+
+- Use NavigationStack with programmatic push (not TabView for steps)
+- Show a step progress indicator at the top (e.g., "Step 2 of 6")
+- Use .navigationBarBackButtonHidden(true) and add a custom back button that
+  warns "Are you sure you want to leave checkout?" via Alert
+- The order confirmation uses a full-screen cover:
+  .fullScreenCover(isPresented: $showSuccess) { CheckoutSuccessView() }
+  This prevents back-swipe to the order form after placing the order
+
+TIMESLOT PICKER UX:
+  Use a Section per date in a List (grouped style)
+  Each section header: the date string
+  Rows: timeslot chips in a horizontally scrolling HStack or wrapping FlowLayout
+
+TRADE CARD UX:
+  Each card = a card (rounded, dark border) in a VStack
+  Expandable: tap to expand/collapse card details
+  Photo upload: show thumbnail after selection
+  Condition: Picker with .menu style (dropdown)
+  Credit display: auto-updated as condition changes (computed property)
+
+ORDER MERGE UX:
+  If existing pending orders exist: show a banner above the Place Order button
+  "You already have an order from [date]. Would you like to add these items to it?"
+  [Merge] [Keep Separate] buttons
+  Tapping Merge → show a summary sheet of what the merged order would look like
+  [Confirm Merge] → POST /api/orders/{id}/merge-cart/
+
+================================================================================
+END OF iOS PLANNING DOCUMENT
+================================================================================

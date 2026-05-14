@@ -1,0 +1,1860 @@
+================================================================================
+  POKESHOP ANDROID NATIVE APP — FULL PLANNING & SPECIFICATION DOCUMENT
+  Generated from complete audit of frontend, backend, and bot code
+  Target: Android Studio Gemini AI Agent
+  Date: May 2026
+================================================================================
+
+This document is a comprehensive specification for rewriting the Pokeshop web
+frontend as a native Android app. Every feature, screen, API endpoint, auth
+flow, admin capability, design token, and edge case has been catalogued here.
+The agent building this app should treat this document as the single source of
+truth. The backend (Django REST API) is NOT being rewritten — the Android app
+is a pure API consumer.
+
+================================================================================
+TABLE OF CONTENTS
+================================================================================
+ 1. Project Overview
+ 2. Recommended Tech Stack
+ 3. Project Folder Structure
+ 4. Backend API Configuration
+ 5. Authentication System
+ 6. Navigation Architecture
+ 7. Design System (Colors, Typography, Shapes, Shadows)
+ 8. Dark / Light Mode
+ 9. Screen Specifications (every screen, full detail)
+10. Admin vs Regular User — Role Differences
+11. Cart System
+12. Checkout Flow (multi-step)
+13. Trade-In System
+14. Timeslot / Pickup System
+15. Push Notifications
+16. Purchase Limits
+17. Coupon System
+18. Image Handling
+19. State Management & Architecture
+20. Security Considerations
+21. API Endpoints Reference (complete list)
+22. Data Models (Kotlin data classes)
+23. Folder Structure
+24. Things That Do NOT Apply to Mobile
+
+================================================================================
+1. PROJECT OVERVIEW
+================================================================================
+
+Pokeshop is a small TCG (Trading Card Game) shop that sells Pokémon cards and
+accessories, primarily to UCSC (UC Santa Cruz) students. The web frontend is a
+Next.js 16 app. This document specifies a from-scratch native Android rewrite.
+
+KEY FACTS:
+- Authentication: Google Sign-In (@ucsc.edu emails only) OR email+password with
+  an "access code" invitation system for non-UCSC users
+- Users can browse products, add to cart, and check out
+- Admin users get a completely different view (dashboard, dispatch, inventory
+  management, etc.)
+- Checkout supports scheduling campus pickup timeslots or ASAP downtown meetups
+- Payment is handled in person (Venmo/Zelle/PayPal/Cash at pickup) — NO
+  in-app payment processing, NO Stripe or credit card integration
+- Trade-in system: users can trade Pokémon cards for store credit to offset
+  their order total
+- Orders are fulfilled in person at pickup, not shipped
+- The app folder lives at: /app/android/ in the pokeshop repo
+- Django backend must be reachable from the phone (production HTTPS URL, not
+  localhost)
+
+================================================================================
+2. RECOMMENDED TECH STACK
+================================================================================
+
+Language:           Kotlin (100%)
+UI Framework:       Jetpack Compose
+Architecture:       MVVM + Repository + Use Cases (Clean Architecture lite)
+Navigation:         Navigation Compose (single-Activity, Compose NavHost)
+HTTP Client:        Retrofit 2 + OkHttp 3 (with logging interceptor)
+JSON Serialization: Moshi or Kotlin Serialization (kotlinx.serialization)
+Image Loading:      Coil 3 (compose integration)
+Auth Token Storage: EncryptedSharedPreferences (Jetpack Security)
+Preferences/State:  DataStore (Preferences)
+Dependency Inject.: Hilt (Dagger Hilt)
+Coroutines:         kotlinx.coroutines
+Rich Text Display:  Compose HTML renderer or WebView (for product descriptions)
+Push Notifications: Firebase Cloud Messaging (FCM)
+Google Sign-In:     Google Identity Services Android SDK (Credential Manager)
+Image Compression:  Compose/Android built-in (before trade card photo upload)
+Paging:             Paging 3 library (for order history, shop grid)
+Testing:            JUnit4, Turbine, MockK, Compose UI tests
+
+Minimum SDK:        API 26 (Android 8.0)
+Target SDK:         API 35 (Android 15)
+Build tool:         Gradle Kotlin DSL
+
+================================================================================
+3. BACKEND API CONFIGURATION
+================================================================================
+
+The backend is a Django REST Framework API. The base URL is configurable.
+
+BASE URL (production): set this in a BuildConfig field, e.g.:
+  - BuildConfig.API_BASE_URL
+
+During development on a physical device, you cannot use localhost. Use either:
+  - An ngrok tunnel pointing to port 8000, or
+  - The machine's LAN IP (e.g., http://192.168.x.x:8000)
+  - Or deploy the Django backend to a cloud host and use HTTPS
+
+All API calls require a JSON Content-Type header unless uploading files
+(multipart/form-data for image uploads).
+
+AUTH HEADER: "Authorization: Bearer <access_token>"
+  - Access tokens expire after 60 minutes
+  - Refresh tokens expire after 7 days
+  - On any 401 response, immediately attempt to refresh the token using
+    POST /api/token/refresh/ with { "refresh": "<refresh_token>" }
+  - If refresh fails, clear stored tokens and redirect to Login screen
+  - Implement token refresh as a thread-safe singleton (only one refresh at a
+    time; queue concurrent requests and replay them after refresh succeeds)
+
+RATE LIMITS (important, enforce these in the UI):
+  - Anonymous users: 120 requests/minute
+  - Authenticated users: 600 requests/minute
+  - Checkout endpoint: 10 requests/hour — show a cooldown message if hit
+
+CORS: The backend allows all origins in development mode. For production, the
+backend will be configured with the app's domain. For native apps, CORS is not
+enforced (it's a browser concept), so this is not a concern.
+
+================================================================================
+4. AUTHENTICATION SYSTEM
+================================================================================
+
+There are three ways to authenticate:
+
+--- 4.1 GOOGLE SIGN-IN (@ucsc.edu only) ---
+- Use the Google Identity Services Credential Manager API for Android
+- The user selects their Google account; you receive an ID token (JWT)
+- POST that token to: POST /api/auth/google/
+  Body: { "token": "<google_id_token>" }
+  Response: { "access": "...", "refresh": "...", "user": { ...UserData } }
+- Store access token + refresh token in EncryptedSharedPreferences
+- The backend ONLY accepts @ucsc.edu Google accounts (validated server-side)
+  If the email is not @ucsc.edu, the backend returns 400; show:
+  "Only @ucsc.edu Google accounts are supported."
+
+--- 4.2 EMAIL/PASSWORD LOGIN ---
+- For non-UCSC users who were given an access code
+- POST /api/auth/login/
+  Body: { "email": "...", "password": "..." }
+  Response: { "access": "...", "refresh": "...", "user": { ...UserData } }
+- Same token storage as Google Sign-In
+
+--- 4.3 ACCESS CODE REGISTRATION (Two-Step) ---
+Step 1 — Validate code:
+  POST /api/auth/validate-access-code/
+  Body: { "code": "<access_code>" }
+  Response: 200 OK if valid, 400 if invalid/expired/maxed out
+
+Step 2 — Create account:
+  POST /api/auth/register/
+  Body: {
+    "email": "...",
+    "password": "...",
+    "first_name": "...",
+    "last_name": "...",
+    "access_code": "<code_from_step1>"
+  }
+  Response: { "access": "...", "refresh": "...", "user": { ...UserData } }
+
+--- 4.4 TOKEN REFRESH ---
+POST /api/token/refresh/
+Body: { "refresh": "<refresh_token>" }
+Response: { "access": "...", "refresh": "..." }  (rotation enabled)
+
+--- 4.5 USER DATA STRUCTURE ---
+The /api/auth/user/ endpoint (GET) returns the current user:
+{
+  "id": 1,
+  "email": "user@ucsc.edu",
+  "username": "user",
+  "is_admin": false,       // ← THIS is the key field for admin detection
+  "first_name": "Jane",
+  "last_name": "Doe",
+  "nickname": "Janie",
+  "discord_id": "12345678",
+  "discord_handle": "janie#1234",
+  "pokemon_icon": {
+    "pokedex_number": 25,
+    "filename": "025.png",
+    "display_name": "Pikachu",
+    "region": "Kanto"
+  },
+  "strike_count": 0,
+  "is_restricted": false
+}
+
+--- 4.6 ADMIN DETECTION ---
+A user is an admin if user.is_admin == true.
+When is_admin is true:
+- Show Admin section in bottom nav or side drawer
+- Home screen shows AdminDashboard instead of the storefront
+- Extra menu items appear
+- Write endpoints (create/edit/delete inventory, dispatch orders, etc.) become
+  available
+
+--- 4.7 STRIKES ---
+If user.strike_count > 0, show a warning banner on the Home screen and on the
+Cart screen. Strikes can restrict checkout ability (user.is_restricted = true).
+
+--- 4.8 DISCORD LINKING (Optional) ---
+- From Settings screen, user can link their Discord account
+- GET /api/auth/discord/initiate/ (authenticated) — returns { "auth_url": "..." }
+- Open that URL in a Custom Chrome Tab or external browser
+- The backend redirects back to the frontend with ?discord=linked|cancelled|error
+- For the native app: use a deep link (custom scheme, e.g., pokeshop://discord/callback)
+  and configure the backend to redirect to that scheme
+- Update the local user data after successful link (refresh user from API)
+
+================================================================================
+5. NAVIGATION ARCHITECTURE
+================================================================================
+
+Use a single NavHost with bottom navigation (BottomNavigationBar) for the main
+app flows. Admin screens use a separate admin navigation section.
+
+--- BOTTOM NAV (Regular User) ---
+Tab 1: Home          (icon: house)
+Tab 2: Shop          (icon: shopping bag / store)
+Tab 3: Cart          (icon: cart with badge for item count)
+Tab 4: Orders        (icon: receipt / list)
+Tab 5: Profile       (icon: person)
+
+--- BOTTOM NAV (Admin User) ---
+Tab 1: Dashboard     (icon: grid / dashboard)
+Tab 2: Shop          (same as regular, admin can still browse)
+Tab 3: Cart          (icon: cart)
+Tab 4: Dispatch      (icon: zap / lightning — for order fulfillment)
+Tab 5: Admin Menu    (icon: settings / wrench — opens admin sub-menu)
+
+The admin user can TOGGLE between "Admin View" and "Storefront View" from the
+home screen (same as web: a toggle button in the admin dashboard header).
+
+--- SCREEN ROUTES (NavGraph destinations) ---
+Public (no auth required):
+  home
+  shop/{categorySlug?}
+  new_releases
+  search?q={query}
+  product/{itemSlug}
+  login
+  register_step1  (access code entry)
+  register_step2  (account creation)
+  delivery_info
+
+Protected (requires login):
+  cart
+  checkout
+  checkout_success/{orderId}
+  orders
+  order_detail/{orderId}
+  settings
+  settings_pokemon_picker  (full-screen picker modal/sheet)
+
+Admin only:
+  admin_dashboard
+  admin_dispatch
+  admin_inventory
+  admin_inventory_edit/{itemSlug?}  (create or edit)
+  admin_categories
+  admin_promos
+  admin_coupons
+  admin_settings
+  admin_access_codes
+  admin_strikes
+  admin_wanted
+  admin_orders  (order history)
+
+================================================================================
+6. DESIGN SYSTEM
+================================================================================
+
+--- 6.1 COLOR PALETTE ---
+Extracted exactly from globals.css. These are Pokémon Center official colors.
+
+PRIMARY BLUE:        #0054A6   (buttons, links, active states, nav selected)
+PRIMARY BLUE DARK:   #003087   (hover/press states on blue)
+PRIMARY BLUE LIGHT:  #D9E9F7   (light accent backgrounds)
+YELLOW ACCENT:       #FDB71D   (accent buttons, badges, sale highlights)
+YELLOW DARK:         #EF970B   (yellow pressed state)
+RED / DANGER:        #D91215   (error states, destructive buttons, "Sold Out")
+RED DARK:            #C00B10   (red pressed state)
+BACKGROUND:          #F0F0F0   (page/screen background — light gray)
+SURFACE:             #FFFFFF   (cards, panels, input backgrounds)
+TEXT PRIMARY:        #000000   (main text)
+TEXT SECONDARY:      #4D4D4D   (body text, descriptions)
+TEXT MUTED:          #767676   (placeholder, caption text)
+BORDER:              #E9E9E9   (dividers, card borders)
+BORDER MID:          #CBCBCB   (input borders, secondary borders)
+DISABLED:            #CDCDCD   (disabled button/input)
+FILTER PANEL BG:     #F5F5F5   (sidebar filter background)
+CARD SHADOW:         rgba(0,0,0,0.08), 0 1px 2px
+HOVER SHADOW:        rgba(0,0,0,0.12), 0 4px 10px
+NAV SHADOW:          rgba(0,0,0,0.08), 0 1px 6px
+
+In Compose: define a ColorScheme in ui/theme/Color.kt with all these values.
+
+--- 6.2 TYPOGRAPHY ---
+Heading font:  Montserrat (use font-weight 700 for headings, 600 for labels)
+Body font:     Open Sans (weight 400 for body, 600 for emphasis)
+
+Load via Google Fonts or bundle as assets.
+- Montserrat: bold (700) for section headers, buttons, nav labels, badges
+- Open Sans: regular (400) for body text, descriptions, prices
+- ALL CAPS + letter-spacing 0.08rem for button labels (Montserrat 700 12sp)
+- Price display: Montserrat 700
+
+In Compose: define Typography in ui/theme/Type.kt
+
+--- 6.3 SHAPES ---
+The web app uses ZERO border-radius on almost everything (sharp rectangular
+corners, matching Pokemon Center's official site style). Do NOT add rounded
+corners to cards, buttons, or inputs. All corners = 0dp (or RectangleShape).
+Exception: Small circular elements like Pokemon icon avatars and badge counts
+can remain circular.
+
+--- 6.4 COMPONENT STYLES ---
+
+Button — Primary:
+  bg: #0054A6, text: white, border: 1px #0054A6
+  Pressed: bg #003087, border #003087
+  Text: Montserrat 700, 12sp, ALL CAPS, letter-spacing 0.08rem
+  Padding: 12dp vertical, 20dp horizontal
+
+Button — Secondary:
+  bg: white, text: black, border: 1px #CBCBCB
+  Pressed: border #0054A6, bg #F5F5F5, text #0054A6
+
+Button — Accent (Yellow):
+  bg: #FDB71D, text: black, border: 1px #FDB71D
+  Pressed: bg #EF970B, border #EF970B
+
+Button — Destructive:
+  bg: #D91215, text: white, border: 1px #D91215
+
+Pill/Chip:
+  border: 1px #CBCBCB, bg white, text black
+  Font: Montserrat 700, 11sp, ALL CAPS, letter-spacing 0.06rem
+  Padding: ~5dp vertical, 9dp horizontal
+
+Input field:
+  border: 1px #CBCBCB, bg white, text black, padding 10dp vertical 12dp horizontal
+  Focused: border #0054A6 + 1px shadow ring #0054A6
+  No border radius (RectangleShape)
+
+Panel/Card:
+  bg white, border 1px #E9E9E9, shadow: 0 1px 2px rgba(0,0,0,0.08)
+  No border radius
+
+================================================================================
+7. DARK / LIGHT MODE
+================================================================================
+
+The web app does not currently implement dark mode. It is a light-only design.
+
+HOWEVER, for the native Android app, implementing dark mode is recommended
+because Android users expect it. Define two theme variants:
+
+LIGHT MODE (matches web exactly):
+  Background: #F0F0F0
+  Surface: #FFFFFF
+  Text Primary: #000000
+  Text Secondary: #4D4D4D
+
+DARK MODE (suggested values, maintain brand feel):
+  Background: #121212
+  Surface: #1E1E1E
+  Surface Variant: #2C2C2C
+  Text Primary: #FFFFFF
+  Text Secondary: #CCCCCC
+  Primary Blue: #4D9FE0  (slightly lighter for contrast on dark)
+  Yellow Accent: #FDB71D  (same)
+  Red: #FF4444  (brighter for dark)
+  Border: #333333
+  Input bg: #2A2A2A
+
+Use MaterialTheme with a DynamicColorScheme for Android 12+ opt-in, but always
+fall back to the brand colors above for older versions.
+
+Respect the system setting (AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM) by
+default, with a manual override option in Settings → Appearance.
+
+================================================================================
+8. SCREEN SPECIFICATIONS
+================================================================================
+
+Below is a screen-by-screen specification for every screen in the app. Each
+entry describes: PURPOSE, LAYOUT, API CALLS, AUTH, STATE, EDGE CASES, and
+ADMIN DIFFERENCES where applicable.
+
+==========================================================
+SCREEN: SPLASH / LOADING
+==========================================================
+PURPOSE: App entry point. Determines auth state and routes user.
+LAYOUT:
+  - Full-screen blue (#0054A6) background
+  - Pokeshop logo centered (or Pokéball icon)
+  - Animated loading indicator
+LOGIC:
+  1. On app start, check EncryptedSharedPreferences for stored tokens
+  2. If access token present AND not expired: call GET /api/auth/user/ to
+     validate and refresh user data; navigate to Home
+  3. If access token expired but refresh token present: call
+     POST /api/token/refresh/; on success store new tokens and go to Home;
+     on failure clear tokens and go to Login
+  4. If no tokens: go to Login
+DURATION: No artificial delay; just wait for the token check API call
+
+==========================================================
+SCREEN: LOGIN
+==========================================================
+PURPOSE: Sign in with Google or email/password. Also entry point for new users
+         with an access code.
+LAYOUT (vertical scroll):
+  Top: Pokeshop logo
+  Heading: "Sign In"
+  
+  [Google Sign-In Button]
+  Styled as: Montserrat 700, white text on blue, Google icon on left
+  Tap action: trigger Google Credential Manager flow for @ucsc.edu accounts
+  
+  Divider: "— OR —"
+  
+  Email input field
+  Password input field (with show/hide toggle)
+  [Sign In Button] — primary blue
+  
+  Below: "Don't have an account? Register with an access code"
+  Link → Register Step 1
+
+BEHAVIOR:
+  - On Google success: POST /api/auth/google/ with id_token
+    On success: store tokens, refresh user, navigate to Home
+    On 400 "not ucsc email": show snackbar "Only @ucsc.edu accounts supported"
+  - On email/password submit:
+    POST /api/auth/login/ with {email, password}
+    On success: store tokens, navigate to Home
+    On 400: show error from response body
+  - While loading: disable buttons, show spinner inside button
+  - Google button should visually match Google's branding guidelines
+
+==========================================================
+SCREEN: REGISTER STEP 1 — Access Code Validation
+==========================================================
+PURPOSE: Let non-UCSC users register using an invitation code.
+LAYOUT:
+  Heading: "Create Account"
+  Sub: "Enter your access code"
+  Access code text input (single line)
+  [Validate Code Button] — primary blue
+  Link: "← Back to Sign In"
+BEHAVIOR:
+  - POST /api/auth/validate-access-code/ with { "code": "<input>" }
+  - On 200: navigate to Register Step 2, passing the validated code
+  - On 400: show error "Invalid or expired access code"
+  - Trim whitespace from input before validating
+
+==========================================================
+SCREEN: REGISTER STEP 2 — Create Account
+==========================================================
+PURPOSE: Complete account creation after code validation.
+LAYOUT:
+  Heading: "Create Account"
+  Sub: "Fill in your details"
+  First Name input
+  Last Name input
+  Email input
+  Password input + confirm password input
+  [Create Account Button] — primary blue
+  Link: "← Back"
+BEHAVIOR:
+  - Validate: confirm password matches; email valid format
+  - POST /api/auth/register/ with { email, password, first_name, last_name, 
+    access_code }
+  - On success: store tokens, navigate to Home
+  - On 400: show field-level errors from response
+
+==========================================================
+SCREEN: HOME — Regular User View
+==========================================================
+PURPOSE: Main landing page for customers. Shows featured products, new arrivals,
+         and CMS-driven promotional sections.
+AUTH: Public (not required to view); some elements hidden for logged-out users
+LAYOUT (LazyColumn):
+  - AnnouncementBanner (if settings.store_announcement is non-empty)
+    - Yellow/blue banner at top with text
+  - Promo Banner / Hero (if CMS section of type HERO exists)
+    - Full-width image (coil async load) with title, subtitle, link
+  - "Free On-Campus Delivery" promo bar (blue strip)
+    → Tap: navigate to Delivery Info screen
+  - For each CMS Homepage Section of type CAROUSEL:
+    - Section title row (Montserrat 700) with "See All →" link
+    - Horizontal scroll row of ProductCards
+    - Quick View tap: open ProductQuickViewSheet (bottom sheet)
+  - If no CMS sections configured: show default layout:
+    - "New Arrivals" horizontal carousel → link to Shop with sort=newest
+    - "Featured" product grid (first 12 items)
+  - Bottom of screen: bottom navigation bar
+
+API CALLS:
+  GET /api/inventory/items/?page=1           (featured items)
+  GET /api/inventory/items/?sort=newest      (new arrivals)
+  GET /api/inventory/homepage-sections/      (CMS sections)
+  GET /api/inventory/settings/               (announcement, store status)
+
+EDGE CASES:
+  - If store_settings.orders_disabled = true: show a banner
+    "Orders are currently disabled. Check back soon."
+  - If store_settings.is_ooo = true: show an OOO banner with the ooo_until date
+  - If user.strike_count > 0: show a warning card above the hero
+    "You have X strike(s) on your account. Repeated violations may restrict
+     your ability to order."
+  - Pull-to-refresh on the whole screen
+
+==========================================================
+SCREEN: HOME — Admin View
+==========================================================
+PURPOSE: Admin dashboard with store stats and shortcuts to admin functions.
+AUTH: Must be is_admin = true
+LAYOUT:
+  - Toggle at top: [Storefront View] [Admin View]  (currently in Admin View)
+  - Stats cards row (horizontal scroll or grid):
+    Each card shows a metric with a label:
+    - Pending Orders count
+    - Today's Revenue
+    - Trade Reviews pending
+    - Overdue Orders count
+    - Items In Stock count
+    - Total Orders this week
+  - Quick Action buttons:
+    → Dispatch (go to admin_dispatch)
+    → Add Inventory (go to admin_inventory_edit with no slug)
+    → View Order History (go to admin_orders)
+    → Manage Coupons (go to admin_coupons)
+    → Store Settings (go to admin_settings)
+  - Recent Orders (last 5): small summary cards showing order_id, user, status
+  - Pending Trade Reviews: list of orders with trade_review status
+  - Overdue Orders: list of orders requiring rescheduling
+
+API CALL:
+  GET /api/orders/admin-dashboard/ — returns all above stats
+
+TOGGLE BEHAVIOR:
+  Switching to "Storefront View" renders the regular Home screen (same user,
+  just different UI mode). The toggle persists while the session is active.
+
+==========================================================
+SCREEN: SHOP — Product Listing
+==========================================================
+PURPOSE: Browse and filter all products. Supports category-scoped views.
+AUTH: Public
+LAYOUT:
+  - TopAppBar:
+    - Back button (if in a category subpage)
+    - Title: category name or "Shop All"
+    - Search icon → open search bar inline or navigate to Search screen
+    - Filter icon → open FilterSheet (modal bottom sheet)
+    - Sort dropdown button
+  - Sticky filter chips row (selected filters as dismissible chips)
+  - LazyVerticalGrid (2 columns on phone, 3 on large screens)
+    - Each cell: ProductCard component
+    - Load more on scroll (Paging 3)
+    - "Sold Out" overlay on cards with stock=0
+  - Loading state: skeleton shimmer in each grid cell
+  - Empty state: "No products found. Try adjusting your filters."
+
+FILTER OPTIONS (bottom sheet "FilterSheet"):
+  PRICE RANGE: two-thumb RangeSlider from $0 to $1000
+  SORT:
+    Featured (default) | Newest | Price: Low to High | Price: High to Low
+  TCG TYPE: dropdown/chips — Fire, Water, Grass, Lightning, Psychic, Fighting,
+    Darkness, Metal, Dragon, Colorless, Fairy
+  TCG STAGE: Basic, Stage 1, Stage 2, V, VMAX, VSTAR, ex, EX, GX, Trainer,
+    Energy
+  RARITY TYPE: Common, Uncommon, Rare, Holo Rare, Ultra Rare, Secret Rare,
+    Illustration Rare, Special Illustration Rare, etc.
+  TCG SUPERTYPE: Pokémon, Trainer, Energy
+  CATEGORY: chips (from /api/inventory/categories/)
+  SUBCATEGORY: appears when a category is selected (from subcategories API)
+  TCG SET NAME: dropdown from /api/inventory/items/facets/
+  ARTIST: dropdown from /api/inventory/items/facets/
+
+  [Apply Filters] button (primary blue)
+  [Clear All] button (secondary)
+
+SORT (on TopAppBar dropdown):
+  - Featured (default sort)
+  - Newest First
+  - Price: Low → High
+  - Price: High → Low
+
+API CALL:
+  GET /api/inventory/items/?category={slug}&sort={sort}&q={q}
+    &min_price={min}&max_price={max}&tag={tag}&tcg_type={type}
+    &tcg_stage={stage}&rarity_type={rarity}&tcg_supertype={supertype}
+    &subcategory={sub}&tcg_set_name={set}&tcg_artist={artist}&page={page}
+
+FACETS:
+  GET /api/inventory/items/facets/  → { "set_names": [...], "artists": [...] }
+  Use these to populate the Set Name and Artist filter dropdowns.
+
+CATEGORY PAGES:
+  /tcg → categorySlug = "" (all items)
+  /tcg/cards → categorySlug = "cards"
+  /tcg/boxes → categorySlug = "boxes"
+  /tcg/accessories → categorySlug = "accessories"
+  /new-releases → sort=newest, lock sort (don't allow changing it)
+  /category/{slug} → custom category
+
+QUICK VIEW:
+  Tap on any ProductCard anywhere → opens ProductQuickViewSheet (bottom sheet)
+  The quick view sheet is equivalent to the "Add to Cart" modal on web.
+  (See ProductQuickViewSheet below)
+
+==========================================================
+SCREEN: SEARCH
+==========================================================
+PURPOSE: Text search across all products.
+AUTH: Public
+LAYOUT:
+  - TopAppBar with large, auto-focused search TextField
+  - Below: filter/sort chips (same as Shop screen filters, compacted)
+  - Results in LazyVerticalGrid (same as Shop)
+  - While typing: debounce 300ms before firing the API call
+  - Empty state (no query): "Start typing to search..."
+  - Empty state (no results): "No products match '{query}'"
+
+API CALL: GET /api/inventory/items/?q={query}&{filters}
+
+==========================================================
+COMPONENT: PRODUCT CARD
+==========================================================
+PURPOSE: A tile in the grid/carousel showing one product.
+SIZE: In grid: spans 1 column. In carousel: fixed width ~160dp.
+LAYOUT:
+  - Product image (Coil async, square or 4:3, crop)
+    If stock=0: dim the image with a 40% dark overlay + "SOLD OUT" text chip
+    If is_holofoil=true: show a "Holofoil" yellow pill badge top-left
+  - Below image:
+    - Title (Open Sans 600, 13sp, 2-line max ellipsis)
+    - Rarity type (Montserrat 700 11sp uppercase, muted color)
+    - Price: "$ X.XX" (Montserrat 700, 14sp)
+    - If has per-user limit: small caption "Limit X/day"
+  - Tap → navigate to Product Detail screen
+  - Long press OR "Quick View" button overlay → open ProductQuickViewSheet
+CARD STYLE: white bg, 1px #E9E9E9 border, 0 1px 2px shadow. No border radius.
+
+==========================================================
+COMPONENT: PRODUCT QUICK VIEW SHEET (Bottom Sheet)
+==========================================================
+PURPOSE: Preview and add-to-cart without leaving the current screen.
+LAYOUT (ModalBottomSheet):
+  - Handle/drag indicator at top
+  - Image gallery: horizontal pager with thumbnails below
+    - Thumbnails: small row of images, tap to jump to that image
+  - Product title (Montserrat 700 16sp)
+  - Rarity / TCG metadata chips
+  - Price (Montserrat 700 18sp)
+  - Stock status: "X in stock" or "Sold Out"
+  - Purchase limit info: "Limit: X per day" (if applies)
+  - Description snippet (2 lines, expandable)
+  - Quantity stepper: [−] [N] [+]
+    - Disabled at 1 (can't go below 1)
+    - Disabled at min(stock, per_user_limit) upper bound
+    - If not logged in, show simpler stepper (no server limit check)
+  - Scheduled drop info: if item has upcoming drops:
+    "Restocking {date}: +{qty} units"
+  - [Add to Cart] button (full width, primary blue)
+    - If stock=0: button disabled, text "Sold Out"
+    - If not logged in: button → navigate to Login with return path
+  - [View Full Details] text link → navigate to Product Detail
+  
+API CALL (when logged in): GET /api/orders/purchase-limits/ → { item_id: remaining }
+  Call this when the sheet opens to check real remaining daily cap.
+
+==========================================================
+SCREEN: PRODUCT DETAIL
+==========================================================
+PURPOSE: Full product details page.
+AUTH: Public
+LAYOUT (NestedScrollView / LazyColumn):
+  - Image gallery: full-width horizontal pager with thumbnail strip below
+    - Pinch-to-zoom (ZoomableBox composable or use accompanist)
+    - If multiple images: thumbnail row below the main pager
+  - Product title (Montserrat 700 20sp)
+  - Price (Montserrat 700 22sp, #0054A6)
+  - Availability: "X in stock" / "Sold Out" (red)
+  - Rarity badge chips: holofoil, rarity_type, tcg_stage, tcg_type
+  - TCG metadata grid:
+    Set: {tcg_set_name}
+    Type: {tcg_type}
+    HP: {tcg_hp}
+    Stage: {tcg_stage}
+    Artist: {tcg_artist}
+    Card #: {card_number}
+  - Description (rich text HTML — render via WebView or HtmlText composable)
+  - Scheduled Drops section (if any):
+    "Upcoming Restock:" card showing each drop's date+qty
+  - Per-user purchase limit (if any):
+    "Limit: X per 24 hours" info chip
+  
+  Bottom sticky bar (shown above keyboard, always visible):
+    - Quantity stepper
+    - [Add to Cart] button (primary blue, full width)
+
+API CALL:
+  GET /api/inventory/items/{slug}/
+  GET /api/orders/purchase-limits/ (when logged in, to check remaining cap)
+
+EDGE CASES:
+  - If stock=0 and no upcoming drops: bottom bar shows "Sold Out" disabled
+  - If stock=0 but has future drop: show "Available {date}: limited quantity"
+  - If user hits daily limit: show "You've reached your daily limit for this item"
+
+==========================================================
+SCREEN: CART
+==========================================================
+PURPOSE: Review cart before checkout.
+AUTH: Required (redirect to Login if not authenticated)
+LAYOUT (LazyColumn):
+  - Heading: "Your Cart" + item count badge
+  - If cart is empty:
+    Illustration + "Your cart is empty"
+    [Browse Products] button → navigate to Shop
+  - For each cart item:
+    - Image thumbnail (56dp x 56dp)
+    - Title (2 lines max) + price per unit
+    - Quantity stepper: [−] [qty] [+]
+    - Remove button (trash icon, red, right side)
+    - Stock warning if qty > available: "Only X left in stock"
+  - Order Summary card at bottom:
+    - Subtotal: $X.XX
+    - Note: "Payment collected at pickup"
+  - [Proceed to Checkout] button (full width, primary blue)
+  - If user.is_restricted = true: show warning card instead of checkout button
+    "Your account has been restricted. Contact the shop to resolve."
+  - Strikes warning banner at top if strike_count > 0
+
+API CALLS:
+  GET /api/orders/cart/          — loads server cart
+  PATCH /api/orders/cart/        — update quantity for an item
+  DELETE /api/orders/cart/       — remove an item
+  On any quantity change: sync to server
+
+SYNC LOGIC:
+  - When user is logged in, cart lives on server (CartItem model)
+  - When user logs in for the first time in a session, call
+    POST /api/orders/cart/sync/ with local cart items to merge
+  - Show loading state while syncing
+
+==========================================================
+SCREEN: CHECKOUT (Multi-Step Flow)
+==========================================================
+PURPOSE: Place an order. This is a multi-step wizard.
+AUTH: Required
+
+The checkout is presented as a vertical stepper or paged flow (ViewPager or
+sequential screens). 7 possible steps (not all shown depending on choices):
+
+--- STEP 1: Review Cart ---
+  - Show cart items summary (read-only)
+  - Show subtotal
+  - [Continue] button
+
+--- STEP 2: Delivery Method ---
+  Two cards to choose between:
+  
+  [Scheduled Campus Delivery]
+  - "Schedule a pickup time on campus"
+  - Campus map icon, address hint
+  
+  [ASAP Downtown Pickup]
+  - "Contact for immediate meetup downtown"
+  - "Admin will reach out via Discord"
+  Selecting ASAP: skip Step 3
+
+--- STEP 3: Pickup Timeslot (only for Scheduled) ---
+  - Group slots by day (next 14 days)
+  - Each day shows a header: "Monday, May 18"
+  - Under each day: chips for each available time window
+    e.g., "2:00 PM – 4:00 PM · Porter Quad · 3 spots left"
+    - Chip color: available = blue outlined; full = gray disabled
+    - Selected: filled blue
+  - Min 2 days advance: cannot select timeslots less than 2 days from now
+  - If is_ooo = true: dates are bumped forward past ooo_until
+  - If no timeslots available: show "No timeslots available. Try ASAP pickup."
+  
+  API CALL: GET /api/orders/active-timeslots/
+    Returns both one-time and recurring timeslots with booking counts.
+
+--- STEP 4: Payment Method ---
+  Show only enabled payment methods (from /api/inventory/settings/):
+    pay_venmo_enabled, pay_zelle_enabled, pay_paypal_enabled,
+    pay_cash_enabled, pay_trade_enabled
+  
+  Cards to select (one at a time):
+    Venmo / Zelle / PayPal / Cash / Trade-In / Cash + Trade
+  
+  If "Trade-In" or "Cash + Trade" selected: Step 5 (Trade Cards) becomes active
+  If pure trade: no cash required; show estimated total credit
+  If cash + trade: user enters trade cards first, then balance via other method
+
+--- STEP 5: Trade Cards (only if payment involves trade) ---
+  (See TRADE-IN SYSTEM section below for full spec)
+  - Add card button: opens TCGCardSearchSheet
+  - For each trade card:
+    - Card name (auto-filled from TCG search or manual entry)
+    - Condition dropdown: Near Mint / Lightly Played / Moderately Played /
+      Heavily Played / Damaged
+    - Estimated value display (auto-calculated from TCG market price × condition)
+    - Photo upload button (optional, opens camera or gallery)
+    - "Wanted Card" badge if card matches store's wanted list
+    - Remove card button
+  - Credit summary at bottom:
+    "Trade Credit: $X.XX (X% of estimated value)"
+    "Remaining Balance: $X.XX" (if cash + trade)
+
+--- STEP 6: Coupon Code ---
+  - Text input: "Enter coupon code"
+  - [Apply] button
+  - On success: show discount amount, updated total
+  - On error: "Invalid or expired coupon code"
+  
+  API CALL: POST /api/orders/validate-coupon/
+    Body: { "code": "...", "order_total": X, "item_ids": [...] }
+    Response: { "valid": true, "discount": 5.00, "message": "..." }
+
+--- STEP 7: Review & Order Merge Check ---
+  MERGE LOGIC: If user has existing pending/under-review orders from the last
+  48 hours, show a banner:
+  "You have an existing order from {date}. Merge items into it?"
+  [Merge into existing order] button → opens OrderMergePreviewSheet
+  [Create new order] button → skip merge
+  
+  API CALL for existing orders: GET /api/orders/my-orders/?status=pending
+  API CALL for merge: POST /api/orders/{orderId}/merge-cart/
+
+  ORDER SUMMARY:
+    Items list (title, qty, price each)
+    Subtotal
+    Coupon discount (if any)
+    Trade credit (if any)
+    Total due at pickup
+    Delivery method + timeslot (if scheduled)
+    Payment method
+    [Place Order] button (yellow accent — most prominent)
+
+  API CALL: POST /api/orders/checkout/
+    Body: {
+      "delivery_method": "scheduled" | "asap",
+      "recurring_timeslot": <id> | null,
+      "pickup_date": "YYYY-MM-DD" | null,
+      "payment_method": "venmo" | "zelle" | "paypal" | "cash" | "trade" |
+                        "cash_plus_trade",
+      "backup_payment_method": "venmo" | ... | null,
+      "coupon_code": "..." | null,
+      "trade_cards": [
+        {
+          "card_name": "...",
+          "estimated_value": 5.00,
+          "condition": "near_mint",
+          "rarity": "Rare Holo",
+          "tcg_product_id": 12345,
+          "base_market_price": 6.00,
+          "custom_price": null,
+          "is_wanted_card": false,
+          "photo": "<base64 or multipart>"
+        }
+      ]
+    }
+  
+  RATE LIMIT: 10 orders/hour. Show appropriate error if hit.
+
+--- STEP 8: Checkout Success ---
+  - Confetti animation (use a Compose confetti library or draw particles)
+  - "Order Placed!" heading
+  - Order ID (large, copyable text)
+  - What happens next guide:
+    For Scheduled: "You'll be notified when your order is ready at [timeslot]"
+    For ASAP: "We'll contact you on Discord at [discord_handle] to arrange pickup"
+  - [View Your Order] button → navigate to Order Detail
+  - [Continue Shopping] button → navigate to Home/Shop
+
+==========================================================
+SCREEN: ORDERS LIST
+==========================================================
+PURPOSE: View all of the user's orders.
+AUTH: Required
+LAYOUT:
+  - TopAppBar: "Your Orders"
+  - Search bar: search by order ID or item name
+  - Filter chips: All | Pending | Fulfilled | Cancelled | Trade Review |
+                  Awaiting Cash
+  - LazyColumn of OrderCard components
+  - Paging 3 (50 per page)
+  - Pull-to-refresh
+
+ORDER CARD:
+  - Order ID (first 8 chars of UUID, e.g., "#AB12CD34")
+  - Date placed
+  - Status badge (color-coded):
+    Pending → blue
+    Fulfilled → green
+    Cancelled → red
+    Trade Review → orange
+    Pending Counteroffer → orange
+    Cash Needed → yellow
+    Requires Rescheduling → red
+  - Item count + first item thumbnail
+  - Total amount
+  - Tap → navigate to Order Detail
+
+API CALL: GET /api/orders/my-orders/?page=1&status={filter}&q={search}
+
+==========================================================
+SCREEN: ORDER DETAIL
+==========================================================
+PURPOSE: Full details and actions for a single order.
+AUTH: Required (own orders only; admin can view any)
+LAYOUT (LazyColumn):
+  - TopAppBar: "Order #{shortId}"
+  - STATUS CARD (prominent, color matches status):
+    - Status name
+    - Date placed / last updated
+    - Scheduled pickup time (if scheduled)
+    - Delivery location
+  
+  - ORDER TIMELINE:
+    List of resolution_summary events (chronological):
+    Each event: icon + timestamp + event description
+    (e.g., "Order placed", "Trade under review", "Trade approved",
+     "Fulfilled at pickup")
+  
+  - ITEMS card:
+    - Each OrderItem: image + title + qty + price_at_purchase
+    - Subtotal
+    - Coupon discount (if any)
+    - Trade credit applied (if any)
+    - Total due
+
+  - PAYMENT & PICKUP INFO card:
+    - Payment method
+    - Delivery method
+    - Pickup time / location
+    - Admin note (if any)
+
+  - TRADE CARDS card (if trade offer exists):
+    - For each trade card: name, condition, estimated value, photo thumbnail
+    - Status: Pending Review / Accepted / Rejected
+    - If counteroffer status: show counteroffer message + expiry + accept/reject
+      buttons
+
+  - ACTIONS (context-sensitive):
+    If status=pending AND not yet departed for pickup:
+      [Cancel Order] button (destructive, with confirmation dialog)
+      API: POST /api/orders/cancel/ with { "order_id": "..." }
+    
+    If requires_rescheduling=true AND reschedule_deadline not passed:
+      [Reschedule Pickup] button → opens TimeslotPickerSheet
+      API: POST /api/orders/reschedule/ with { "order_id": "...",
+        "recurring_timeslot_id": ..., "pickup_date": "..." }
+    
+    If status=pending_counteroffer:
+      Counteroffer message box
+      [Accept Counteroffer] → API: POST /api/orders/respond-counteroffer/
+        with { "order_id": "...", "action": "accept" }
+      [Decline Counteroffer] → same with "action": "decline"
+      Expiry countdown timer
+    
+    [Contact via Discord] button (if user has discord_id):
+      Opens Discord app deep link or discord.com URL
+
+==========================================================
+SCREEN: SETTINGS / PROFILE
+==========================================================
+PURPOSE: User profile management and account settings.
+AUTH: Required
+LAYOUT (LazyColumn):
+  - PROFILE HEADER:
+    - Pokemon icon avatar (large, circular, tapable)
+    - Display name (nickname or first + last name)
+    - Email
+
+  - POKEMON ICON section:
+    - Current icon (small circular image)
+    - [Change Icon] → navigate to PokemonIconPicker screen
+  
+  - PERSONAL INFO section (editable):
+    - First Name input
+    - Last Name input
+    - Nickname input
+    - [Save Changes] button
+    API: PATCH /api/auth/profile/ with { first_name, last_name, nickname }
+  
+  - DISCORD ACCOUNT section:
+    - If discord_id present:
+      "Linked as {discord_handle}" + Discord logo
+      [Unlink Discord] button (opens confirmation dialog, then:
+        PATCH /api/auth/profile/ with { "discord_id": null })
+    - If not linked:
+      "Link your Discord account to receive order notifications"
+      [Link Discord] button →
+        GET /api/auth/discord/initiate/ → { "auth_url": "..." }
+        Open Custom Chrome Tab for Discord OAuth
+        Handle redirect via deep link pokeshop://discord/callback?status=linked|error|cancelled
+        Show success/error snackbar
+  
+  - STRIKES section (only if strike_count > 0):
+    Warning card: "You have {count} strike(s) on your account"
+    List of strikes with reason + date
+    API: GET /api/auth/my-strikes/
+  
+  - APPEARANCE section:
+    - Theme: System / Light / Dark  (SegmentedButton)
+    - Note: persisted locally in DataStore, not sent to server
+  
+  - ACCOUNT ACTIONS section:
+    - [Sign Out] button (secondary/destructive)
+      Clear tokens + user from EncryptedSharedPreferences
+      Navigate to Login
+
+==========================================================
+SCREEN: POKEMON ICON PICKER
+==========================================================
+PURPOSE: Let user choose a Pokémon sprite as their profile icon.
+LAYOUT:
+  - TopAppBar: "Choose Your Pokémon" + [Done] button
+  - Search bar to filter by name
+  - Filter chips by region: Kanto / Johto / Hoenn / Sinnoh / Unova / etc.
+  - LazyVerticalGrid (5 columns): each cell is a circular Pokémon sprite
+  - Selected cell gets a blue ring highlight
+  - [Done] tapped: PATCH /api/auth/profile/ with { "pokemon_icon": id }
+
+API CALL: GET /api/auth/pokemon-icons/?region={region}&q={name}
+
+==========================================================
+SCREEN: DELIVERY INFO
+==========================================================
+PURPOSE: Static informational page about how ordering and delivery works.
+AUTH: Public
+LAYOUT (LazyColumn):
+  - Hero banner / illustration
+  - "How It Works" section
+    1. Browse & Add to Cart
+    2. Choose your pickup method
+    3. Pay at pickup (Venmo, Zelle, PayPal, or Cash)
+  - Payment methods section (showing icons/logos for Venmo, Zelle, PayPal, Cash)
+  - Campus Pickup section (schedule, location, what to expect)
+  - ASAP Downtown section (for urgent orders, Discord contact needed)
+  - FAQ section (static content, hardcoded)
+NOTE: This screen is mostly hardcoded / static content. It does not call APIs.
+
+==========================================================
+SCREEN: ADMIN — DISPATCH
+==========================================================
+PURPOSE: Order fulfillment management. Core admin workflow.
+AUTH: Admin only
+LAYOUT:
+  - TopAppBar: "Dispatch"
+  - TabRow: [TRADES] [FULFILLMENT] [OVERDUE]
+
+  TAB: TRADES
+  - List of orders with status=trade_review or pending_counteroffer
+  - Each card: order info + trade cards submitted
+  - For each trade card in each order:
+    - Card name, estimated value, condition, "Wanted" badge if is_wanted_card
+    - Photo thumbnail (tap to expand full size)
+    - TCG oracle price lookup result
+    - [Accept] [Reject] buttons per card (if allow_partial mode)
+    - Override value input
+  - Bulk action: [Accept All] [Reject All]
+  - If counteroffer mode: text input for counteroffer message + expiry date picker
+  - [Submit Decision] button
+
+  API CALLS:
+    GET /api/orders/dispatch/ → list of trade review orders
+    POST /api/orders/dispatch/ with decision payload
+
+  TAB: FULFILLMENT
+  - List of pending/cash_needed orders grouped by pickup timeslot
+  - Filter: by date / payment method / delivery method
+  - Each order card:
+    - Order ID, user name + discord handle, item(s), total
+    - Payment method badge
+    - Status badge
+    - [Fulfill] button → marks as fulfilled; asks for confirmation
+    - [Cancel] button → marks as cancelled
+    - [Acknowledge] button (for ASAP orders)
+    - [Reschedule] button → opens timeslot picker for this order
+  
+  API CALL:
+    GET /api/orders/dispatch/
+    POST /api/orders/dispatch/ with { action: "fulfill"|"cancel"|"acknowledge",
+      "order_id": "..." }
+
+  TAB: OVERDUE
+  - Orders past their rescheduling deadline
+  - Each card: order info + overdue indicator + days overdue
+  - Admin can cancel or force-reschedule these orders
+
+==========================================================
+SCREEN: ADMIN — INVENTORY MANAGEMENT
+==========================================================
+PURPOSE: Create, edit, and manage products.
+AUTH: Admin only
+LAYOUT:
+  - TopAppBar: "Inventory" + [+ New Item] button
+  - Search bar + sort/filter controls
+  - LazyColumn of inventory items
+    - Each row: thumbnail + title + price + stock count + category + status
+    - Status: Active (green) / Inactive (gray)
+    - Tap row → navigate to edit screen for that item
+
+ADMIN ITEM EDIT SCREEN:
+  TopAppBar: "Edit Item" or "New Item"
+  Scrollable form:
+
+  SECTION: TCG Import
+    - If creating new item: show [Import from TCG Database] button
+    - Opens TCGCardSearchSheet: search by card name
+    - On select: auto-fills all TCG fields, price, image URL from the oracle DB
+    API: GET /api/inventory/tcg-search/?q={query}
+    API: POST /api/inventory/tcg-import/ with { product_id: ... }
+
+  SECTION: Basic Info
+    - Title input
+    - Price input (decimal, $)
+    - Stock input (integer)
+    - Max per user / per week / lifetime inputs
+    - Short description input
+    - Description rich text editor (WebView-based or Compose HTML editor)
+    - Published toggle
+    - is_active toggle
+
+  SECTION: Category & Tags
+    - Category dropdown (from /api/inventory/categories/)
+    - Subcategory dropdown (populated based on selected category)
+    - Tags multi-select chips (from categories endpoint or tags endpoint)
+
+  SECTION: TCG Metadata
+    - TCG Type dropdown (Fire, Water, Grass, etc.)
+    - TCG Stage dropdown
+    - Rarity Type dropdown
+    - TCG Supertype dropdown
+    - Is Holofoil toggle
+    - TCG Set Name input
+    - TCG Artist input
+    - TCG HP input
+    - TCG Set Release Date datepicker
+    - Card Number input
+
+  SECTION: Images
+    - Drag-reorderable image list
+    - Each image: thumbnail + remove button
+    - [Add Image] button: pick from gallery or enter URL
+    - Position order determines display order (first image = primary)
+    - API: POST to save new images, POST /reorder-images/ to update order
+
+  SECTION: Scheduled Drops
+    - List of upcoming inventory drops
+    - [Add Drop]: qty + date/time picker
+    - [Remove] each drop
+
+  [Save Item] / [Update Item] button at bottom
+  [Delete Item] (only on edit, with confirmation dialog)
+
+  API CALLS:
+    GET /api/inventory/items/{slug}/        (load existing)
+    POST /api/inventory/items/              (create)
+    PATCH /api/inventory/items/{slug}/      (update)
+    DELETE /api/inventory/items/{slug}/     (delete, with confirmation)
+    POST /api/inventory/items/{slug}/reorder-images/
+    POST /api/inventory/inventory-drops/
+
+==========================================================
+SCREEN: ADMIN — CATEGORIES
+==========================================================
+PURPOSE: Manage product categories and subcategories.
+LAYOUT:
+  - List of categories, each expandable to show subcategories
+  - [+ New Category] button
+  - For each category:
+    - Name, slug, image URL preview, active toggle
+    - [Edit] [Delete] (delete disabled if is_core=true)
+  - For each subcategory within a category:
+    - Name, slug, active toggle
+    - [Edit] [Delete]
+  - Edit/Create in-place or bottom sheet
+
+API CALLS:
+  GET /api/inventory/categories/
+  POST /api/inventory/categories/
+  PATCH /api/inventory/categories/{slug}/
+  DELETE /api/inventory/categories/{slug}/
+  GET /api/inventory/subcategories/
+  POST /api/inventory/subcategories/
+  PATCH /api/inventory/subcategories/{id}/
+
+==========================================================
+SCREEN: ADMIN — PROMO BANNERS
+==========================================================
+PURPOSE: Manage homepage promotional banners.
+AUTH: Admin only
+LAYOUT:
+  - List of banners ordered by position_order
+  - Reorderable (drag handles)
+  - Each banner: title, size chip, preview image thumbnail, active toggle
+  - [+ New Banner] button
+  - Edit sheet:
+    - Title input
+    - Subtitle input
+    - Image: upload from gallery OR enter URL
+    - Link URL input
+    - Size: FULL / HALF / QUARTER (segmented control)
+    - Position order (drag to reorder in list)
+    - Active toggle
+
+  HOMEPAGE SECTIONS management:
+    - Separate section of the screen for managing CMS homepage sections
+    - Each section: title, type (HERO/CAROUSEL/GRID), position, active toggle
+    - Can assign banners to HERO sections
+    - Can assign items to CAROUSEL sections
+
+API CALLS:
+  GET /api/inventory/promo-banners/
+  POST /api/inventory/promo-banners/
+  PATCH /api/inventory/promo-banners/{id}/
+  DELETE /api/inventory/promo-banners/{id}/
+  GET /api/inventory/homepage-sections/
+  POST /api/inventory/homepage-sections/
+  PATCH /api/inventory/homepage-sections/{id}/
+
+==========================================================
+SCREEN: ADMIN — COUPONS
+==========================================================
+PURPOSE: Create and manage discount codes.
+AUTH: Admin only
+LAYOUT:
+  - List of coupons: code, discount, usage count, expiry, active status
+  - [+ New Coupon] button
+  - Edit form (full screen or sheet):
+    - Code input (alphanumeric)
+    - Discount type: Fixed ($) or Percentage (%)
+    - Discount amount input
+    - Usage limit (0 = unlimited)
+    - Expiry date picker
+    - Minimum order total input
+    - [Select Specific Products] (ProductPickerSheet) — leave empty for any product
+    - Cash only toggle
+    - Active toggle
+  - [Deactivate] / [Delete] per coupon (with confirmation)
+
+API CALLS:
+  GET /api/orders/coupons/
+  POST /api/orders/coupons/
+  PATCH /api/orders/coupons/{id}/
+  DELETE /api/orders/coupons/{id}/
+
+==========================================================
+SCREEN: ADMIN — SETTINGS
+==========================================================
+PURPOSE: Configure store-wide settings.
+AUTH: Admin only
+LAYOUT (form with save/discard bar at bottom):
+
+  SECTION: Trade Credit
+    - Trade credit percentage slider (e.g., 85%)
+    - Max trade cards per order input
+
+  SECTION: Store Status
+    - Orders disabled toggle
+    - Out of Office toggle
+    - OOO until date picker (shown when OOO is on)
+
+  SECTION: Store Announcement
+    - Multi-line text input for store_announcement
+    - Leave empty to hide the announcement banner
+
+  SECTION: Payment Methods
+    - Venmo enabled toggle
+    - Zelle enabled toggle
+    - PayPal enabled toggle
+    - Cash enabled toggle
+    - Trade-In enabled toggle
+
+  SECTION: Timeslots
+    - List of recurring timeslots:
+      Day of week, start time, end time, location, max bookings, active
+    - [+ Add Timeslot] button
+    - Edit in-place or sheet:
+      - Day of week dropdown
+      - Start time / end time pickers
+      - Location input
+      - Max bookings input
+      - Active toggle
+
+  SECTION: Discord Integration
+    - Discord webhook URL input
+    - UCSC Discord invite URL
+    - Public Discord invite URL
+
+  SECTION: Footer
+    - Show newsletter signup toggle
+
+  [Unsaved Changes Bar] — sticky bottom bar showing [Save] [Discard] when
+  any field has been changed from the server-saved value.
+
+API CALLS:
+  GET /api/inventory/settings/
+  PATCH /api/inventory/settings/
+  GET /api/inventory/recurring-timeslots/
+  POST /api/inventory/recurring-timeslots/
+  PATCH /api/inventory/recurring-timeslots/{id}/
+  DELETE /api/inventory/recurring-timeslots/{id}/
+
+==========================================================
+SCREEN: ADMIN — ACCESS CODES
+==========================================================
+PURPOSE: Create and manage invitation access codes.
+AUTH: Admin only
+LAYOUT:
+  - List of codes: code, usage_limit, times_used, expires_at, is_active, note
+  - [+ Generate Code] button
+    - Auto-generate random code OR enter custom code
+    - Usage limit (0 = unlimited)
+    - Expiry date (optional)
+    - Note/label input
+  - Deactivate / Delete actions per code
+
+API CALLS:
+  GET /api/inventory/access-codes/
+  POST /api/inventory/access-codes/
+  PATCH /api/inventory/access-codes/{id}/
+  DELETE /api/inventory/access-codes/{id}/
+
+==========================================================
+SCREEN: ADMIN — STRIKES
+==========================================================
+PURPOSE: Manage user strikes (warnings/penalties).
+AUTH: Admin only
+LAYOUT:
+  - Search users by email / Discord handle
+  - List of users with strikes: avatar + name + email + strike count
+  - Per user, expandable list of strikes:
+    - Reason, given by, date, acknowledged status
+    - [Remove Strike] button per strike (with confirmation)
+  - [Add Strike to User] button:
+    - Opens sheet: select user (search) + reason text
+    API: POST /api/auth/strikes/ with { user_id, reason }
+
+API CALLS:
+  GET /api/auth/users-with-strikes/
+  GET /api/auth/search-users/?q={query}
+  POST /api/auth/strikes/
+  DELETE /api/auth/strikes/{id}/
+
+==========================================================
+SCREEN: ADMIN — WANTED CARDS
+==========================================================
+PURPOSE: Manage the list of cards the shop wants to buy via trade-in.
+AUTH: Admin only
+LAYOUT:
+  - List of wanted cards: image + name + estimated_value + active toggle
+  - [+ Add Wanted Card] button
+  - Create/Edit form (screen or sheet):
+    - [Search TCG Database] → TCGCardSearchSheet to auto-fill card data
+    - Name input
+    - Description input
+    - Estimated value input
+    - Image upload (from gallery, with compression)
+    - Active toggle
+  - Deactivate / Delete per card
+
+API CALLS:
+  GET /api/inventory/wanted/
+  POST /api/inventory/wanted/
+  PATCH /api/inventory/wanted/{slug}/
+  DELETE /api/inventory/wanted/{slug}/
+  GET /api/inventory/tcg-search/?q=...
+
+==========================================================
+SCREEN: ADMIN — ORDER HISTORY
+==========================================================
+PURPOSE: View all historical orders.
+AUTH: Admin only
+LAYOUT:
+  - Search bar (order ID, user email, item name, Discord handle)
+  - Status filter chips
+  - Date range filter
+  - LazyColumn with Paging 3 (50 per page)
+  - Each order card: same as user's Orders screen but shows customer name
+  - Tap order → navigate to Order Detail (admin can view any order)
+
+API CALL: GET /api/orders/admin-history/?q={q}&status={status}&page={page}
+
+================================================================================
+9. TRADE-IN SYSTEM (Full Specification)
+================================================================================
+
+The trade-in system allows customers to offset their order total by bringing
+in Pokémon cards for the shop to buy.
+
+--- CREDIT FORMULA ---
+base_market_price: fetched from TCG oracle database (TCGCSV/pokemontcg.io)
+condition_multiplier:
+  Near Mint:        1.00
+  Lightly Played:   0.85
+  Moderately Played:0.70
+  Heavily Played:   0.50
+  Damaged:          0.30
+credit_percentage: from store settings (e.g., 85%)
+
+card_credit = base_market_price × condition_multiplier × (credit_percentage/100)
+
+total_trade_credit = sum(card_credit for all accepted cards)
+
+--- CARD ENTRY FLOW ---
+1. User taps [Add Trade Card] in checkout step 5
+2. Opens TCGCardSearchSheet (bottom sheet):
+   - Text input, debounced search via GET /api/inventory/tcg-search/?q=...
+   - Shows search results: card name, set, rarity, current market price
+   - Tap a result: auto-fills card_name, tcg_product_id, base_market_price,
+     rarity, estimated_value
+   - "Enter manually" toggle: free-text entry (no oracle lookup)
+3. Back in trade card list:
+   - Show card name, condition dropdown, estimated credit
+   - Optional: [Add Photo] button (important for condition verification)
+   - Photo: compress to <2MB before attaching
+   - "Wanted Card" badge: show if card name matches any active wanted card
+     GET /api/inventory/wanted/ and do client-side name matching
+
+--- MODES ---
+"All or Nothing" (default): Admin approves or rejects the entire trade
+"Allow Partial": Admin can accept/reject individual cards with per-card overrides
+
+The user selects trade_mode in the checkout if the store allows partial.
+The current web frontend uses "allow_partial" as a user choice in checkout.
+
+--- TRADE OVERAGE ---
+If total trade credit > order subtotal:
+  trade_overage = total_credit - subtotal
+  Show: "Trade credit exceeds order total. You'll receive $X.XX in store credit"
+  The backend stores this overage on the Order model.
+
+--- ADMIN TRADE REVIEW ---
+In Dispatch → TRADES tab:
+  - Admin sees each trade card with oracle-fetched price vs. user estimate
+  - Can accept/reject per card (partial mode) or all-or-nothing
+  - Can override the value of individual cards
+  - Can send a counteroffer: custom message + expires_at datetime
+  - User receives notification (via Discord DM or push notification)
+  - User can accept or decline counteroffer from Order Detail screen
+
+================================================================================
+10. PURCHASE LIMITS
+================================================================================
+
+Per item, there are up to 3 independent limits:
+  max_per_user:      daily limit (noon to noon reset)
+  max_per_week:      rolling 7-day window
+  max_total_per_user:lifetime limit (null = no limit)
+
+At checkout and in the quick view sheet, the app checks:
+GET /api/orders/purchase-limits/
+Response: { "item_id_1": { "remaining_today": 2, "remaining_week": 5 }, ... }
+
+When adding to cart: client-side enforce qty ≤ remaining
+At checkout: server also enforces (so double-check on submit)
+
+If a user has already hit their limit, show:
+"You've reached your purchase limit for [Item Name]."
+
+================================================================================
+11. COUPON SYSTEM
+================================================================================
+
+Coupons are validated in real-time during checkout step 6.
+POST /api/orders/validate-coupon/ with { "code": "...", "order_total": X,
+  "item_ids": [id1, id2, ...] }
+
+Response fields:
+  valid: bool
+  discount: decimal (amount to subtract)
+  discount_type: "fixed" | "percent"
+  message: string (shown to user)
+  requires_cash_only: bool (if true, hide non-cash payment options)
+
+If requires_cash_only and user had selected Venmo/Zelle/PayPal:
+  Show: "This coupon requires cash payment. Please go back and select Cash."
+  Gray out non-cash payment options.
+
+================================================================================
+12. TIMESLOT SYSTEM
+================================================================================
+
+GET /api/orders/active-timeslots/
+Returns two arrays:
+  recurring: [{ id, day_of_week, start_time, end_time, location, max_bookings,
+               bookings_for_date: { "2026-05-18": 3 } }]
+  one_time: [{ id, start, end, max_bookings, current_bookings }]
+
+Display logic for recurring timeslots:
+  - day_of_week: 0=Monday, 1=Tuesday, ..., 6=Sunday
+  - For each slot, calculate the next N occurrences (next 3 weeks)
+  - For each occurrence date, check bookings_for_date to show capacity
+  - "X spots left" where X = max_bookings - bookings_for_date[date]
+  - Date must be >= today + 2 days (advance purchase window)
+  - If is_ooo = true and ooo_until is set: start from ooo_until date + 1 day
+
+When user selects a slot: store { recurring_timeslot_id, pickup_date } or
+{ pickup_timeslot_id } for one-time slots.
+
+================================================================================
+13. PUSH NOTIFICATIONS
+================================================================================
+
+The Discord bot currently handles order notifications via Discord DMs. For the
+native app, replace with Firebase Cloud Messaging (FCM).
+
+The backend needs modification to support FCM tokens, but plan for these
+notification types in the app:
+
+  ORDER_PLACED:       "Your order #XXXXXX has been placed!"
+  TRADE_UNDER_REVIEW: "Your trade-in is being reviewed"
+  TRADE_APPROVED:     "Trade accepted! Your credit is confirmed."
+  TRADE_REJECTED:     "Trade declined. See your order for details."
+  COUNTEROFFER:       "New counteroffer for order #XXXXXX. Respond by {date}."
+  ORDER_FULFILLED:    "Your order is ready for pickup!"
+  ORDER_CANCELLED:    "Order #XXXXXX has been cancelled."
+  RESCHEDULE_NEEDED:  "Please reschedule order #XXXXXX by {deadline}."
+  REMINDER:           "Reminder: pickup for order #XXXXXX is tomorrow."
+
+In the app:
+  1. On first login, request notification permission
+  2. Get FCM token: FirebaseMessaging.getInstance().token
+  3. POST /api/auth/profile/ with { "fcm_token": "..." } (backend needs this field)
+  4. On notification tap: deep link to the relevant order
+
+NOTE: The backend currently only sends Discord DMs. Backend modifications needed
+to support FCM. Plan for this as a future backend task, but build the client-side
+infrastructure now.
+
+================================================================================
+14. STATE MANAGEMENT & ARCHITECTURE
+================================================================================
+
+Use MVVM + Repository pattern:
+
+UI Layer (Compose screens)
+  ↓ observes
+ViewModel (holds UI state via StateFlow/UiState sealed class)
+  ↓ calls
+Use Cases / Repositories
+  ↓ calls
+Remote Data Source (Retrofit services)
+Local Data Source (DataStore, EncryptedSharedPreferences)
+
+Each major feature has:
+  - Repository interface + implementation
+  - ViewModel with UiState sealed class:
+    sealed class UiState<T> {
+      object Loading : UiState<Nothing>()
+      data class Success<T>(val data: T) : UiState<T>()
+      data class Error(val message: String) : UiState<Nothing>()
+    }
+  - Compose screens collect state as collectAsState()
+
+CART STATE:
+  Managed in CartRepository (singleton via Hilt)
+  Backed by server (GET/PATCH/DELETE /api/orders/cart/)
+  Local cache in memory for the session
+  Observable cart item count for badge display
+
+AUTH STATE:
+  AuthRepository (singleton) backed by EncryptedSharedPreferences
+  Exposes: currentUser: StateFlow<User?>, isLoggedIn, isAdmin
+  Token refresh handled transparently by an OkHttp interceptor
+
+================================================================================
+15. SECURITY CONSIDERATIONS
+================================================================================
+
+1. STORE TOKENS IN EncryptedSharedPreferences (not plain SharedPreferences)
+   Do NOT store tokens in regular files or plain preferences.
+
+2. Never log token values, even in debug builds.
+
+3. SSL PINNING: Consider pinning the backend certificate in production.
+   Use OkHttp CertificatePinner for the production backend domain.
+
+4. CERTIFICATE VALIDATION: Never use setHostnameVerifier that accepts all hosts.
+
+5. RATE LIMITING: Respect backend rate limits. Implement exponential backoff
+   on 429 responses.
+
+6. DEEPLINK HANDLING: pokeshop:// scheme deep links should only be processed
+   when they come from the expected sources (Discord OAuth, etc). Validate the
+   state parameter in OAuth callbacks.
+
+7. IMAGE UPLOAD: Validate file type client-side before upload. Only JPEG/PNG.
+   Compress images to max 2MB before sending.
+
+8. INPUT SANITIZATION: While the backend sanitizes inputs, do not send
+   empty/null values where the API expects data.
+
+9. ADMIN ROUTES: Even though the backend enforces admin permissions, hide admin
+   UI elements entirely from non-admin users client-side.
+
+================================================================================
+16. IMAGE HANDLING
+================================================================================
+
+Product images:
+  - Loaded from backend URLs via Coil
+  - Use CrossFade transitions
+  - Placeholder: gray shimmer skeleton
+  - Error fallback: Poké Ball icon
+  - Cache: Coil's built-in memory + disk cache
+  - Format: backend serves JPEG/PNG; Coil handles both
+
+Profile images / Pokémon icons:
+  - Served from /api/auth/pokemon-icons/ endpoint
+  - Filenames like "025.png" served from static files
+  - Small circular images; cache aggressively
+
+Trade card photos (upload):
+  - User picks from gallery or takes photo with camera
+  - Compress with Android ImageDecoder + Bitmap compression to < 2MB
+  - Show upload progress while submitting
+  - Sent as multipart/form-data
+
+Banner images:
+  - Can be URLs or uploaded files
+  - Load with Coil, full-width, aspect ratio maintained
+
+================================================================================
+17. API ENDPOINTS REFERENCE (COMPLETE LIST)
+================================================================================
+
+All endpoints use Bearer token auth unless marked (public).
+
+AUTHENTICATION:
+  POST   /api/token/                          — get tokens (public)
+  POST   /api/token/refresh/                  — refresh token (public)
+  POST   /api/auth/google/                    — Google OAuth login (public)
+  POST   /api/auth/login/                     — email/password login (public)
+  POST   /api/auth/validate-access-code/      — validate access code (public)
+  POST   /api/auth/register/                  — register with code (public)
+  GET    /api/auth/user/                      — current user profile
+  PATCH  /api/auth/profile/                   — update profile
+  GET    /api/auth/discord/initiate/          — start Discord OAuth
+  GET    /api/auth/discord/callback/          — Discord OAuth callback
+  GET    /api/auth/pokemon-icons/             — list Pokemon icons (public)
+  GET    /api/auth/search-users/              — search users (admin)
+  GET    /api/auth/users-with-strikes/        — users with strikes (admin)
+  GET    /api/auth/my-strikes/               — own strike history
+  GET    /api/auth/strikes/                   — all strikes (admin)
+  POST   /api/auth/strikes/                   — add strike (admin)
+  DELETE /api/auth/strikes/{pk}/              — remove strike (admin)
+
+INVENTORY:
+  GET    /api/inventory/items/                — list items (public, paginated, filterable)
+  POST   /api/inventory/items/               — create item (admin)
+  GET    /api/inventory/items/{slug}/         — item detail (public)
+  PATCH  /api/inventory/items/{slug}/        — update item (admin)
+  DELETE /api/inventory/items/{slug}/        — delete item (admin)
+  GET    /api/inventory/items/by-id/{pk}/     — item by numeric ID (public)
+  GET    /api/inventory/items/facets/         — set names & artists (public)
+  POST   /api/inventory/items/{slug}/reorder-images/ — reorder images (admin)
+  GET    /api/inventory/categories/           — list categories (public)
+  POST   /api/inventory/categories/          — create category (admin)
+  PATCH  /api/inventory/categories/{slug}/   — update category (admin)
+  DELETE /api/inventory/categories/{slug}/   — delete category (admin)
+  GET    /api/inventory/subcategories/        — list subcategories
+  POST   /api/inventory/subcategories/       — create subcategory (admin)
+  PATCH  /api/inventory/subcategories/{id}/  — update subcategory (admin)
+  GET    /api/inventory/wanted/               — list wanted cards (public)
+  POST   /api/inventory/wanted/              — create wanted card (admin)
+  PATCH  /api/inventory/wanted/{slug}/       — update wanted card (admin)
+  DELETE /api/inventory/wanted/{slug}/       — delete wanted card (admin)
+  GET    /api/inventory/settings/             — store settings (public)
+  PATCH  /api/inventory/settings/            — update settings (admin)
+  GET    /api/inventory/recurring-timeslots/  — list recurring timeslots (public)
+  POST   /api/inventory/recurring-timeslots/ — create timeslot (admin)
+  PATCH  /api/inventory/recurring-timeslots/{id}/ — update timeslot (admin)
+  DELETE /api/inventory/recurring-timeslots/{id}/ — delete timeslot (admin)
+  GET    /api/inventory/access-codes/         — list access codes (admin)
+  POST   /api/inventory/access-codes/        — create access code (admin)
+  PATCH  /api/inventory/access-codes/{id}/   — update access code (admin)
+  GET    /api/inventory/inventory-drops/      — list drops (admin)
+  POST   /api/inventory/inventory-drops/     — create drop (admin)
+  GET    /api/inventory/tcg-search/?q={query} — search TCG cards (public, min 2 chars)
+  POST   /api/inventory/tcg-import/          — import TCG card data (admin)
+  GET    /api/inventory/tcg-sets/             — list TCG sets (public)
+  GET    /api/inventory/promo-banners/        — list banners (public)
+  POST   /api/inventory/promo-banners/       — create banner (admin)
+  PATCH  /api/inventory/promo-banners/{id}/  — update banner (admin)
+  DELETE /api/inventory/promo-banners/{id}/  — delete banner (admin)
+  GET    /api/inventory/homepage-sections/    — list sections (public)
+  POST   /api/inventory/homepage-sections/   — create section (admin)
+  PATCH  /api/inventory/homepage-sections/{id}/ — update section (admin)
+
+ORDERS:
+  GET    /api/orders/cart/                    — get cart items
+  POST   /api/orders/cart/                    — add item to cart
+  PATCH  /api/orders/cart/                    — update cart item qty
+  DELETE /api/orders/cart/                    — remove cart item
+  POST   /api/orders/cart/sync/              — sync local cart to server
+  POST   /api/orders/checkout/               — place order (rate limited: 10/hr)
+  GET    /api/orders/my-orders/              — user's orders (paginated)
+  GET    /api/orders/receipt/{order_id}/     — order detail
+  POST   /api/orders/cancel/                 — cancel order
+  POST   /api/orders/reschedule/             — reschedule pickup
+  POST   /api/orders/respond-counteroffer/   — accept/decline counteroffer
+  GET    /api/orders/purchase-limits/        — remaining per-item limits
+  POST   /api/orders/{order_id}/merge-cart/  — merge cart into existing order
+  POST   /api/orders/support-tickets/        — create support ticket
+  GET    /api/orders/coupons/               — list coupons (admin: all, user: public)
+  POST   /api/orders/coupons/              — create coupon (admin)
+  PATCH  /api/orders/coupons/{id}/         — update coupon (admin)
+  DELETE /api/orders/coupons/{id}/         — delete coupon (admin)
+  POST   /api/orders/validate-coupon/      — validate coupon (public)
+  GET    /api/orders/active-timeslots/     — available pickup slots (public)
+  GET    /api/orders/admin-history/        — all orders (admin, paginated)
+  GET    /api/orders/dispatch/             — pending dispatch orders (admin)
+  POST   /api/orders/dispatch/             — process dispatch action (admin)
+  GET    /api/orders/admin-dashboard/      — dashboard stats (admin)
+
+================================================================================
+18. FOLDER STRUCTURE (Android Project)
+================================================================================
+
+app/android/
+├── app/
+│   ├── src/main/
+│   │   ├── java/com/pokeshop/android/
+│   │   │   ├── MainActivity.kt
+│   │   │   ├── PokeshopApplication.kt        (Hilt app class)
+│   │   │   ├── di/                            (Hilt modules)
+│   │   │   │   ├── NetworkModule.kt
+│   │   │   │   ├── RepositoryModule.kt
+│   │   │   │   └── DataStoreModule.kt
+│   │   │   ├── data/
+│   │   │   │   ├── api/                       (Retrofit service interfaces)
+│   │   │   │   │   ├── AuthApiService.kt
+│   │   │   │   │   ├── InventoryApiService.kt
+│   │   │   │   │   └── OrdersApiService.kt
+│   │   │   │   ├── model/                     (API response data classes)
+│   │   │   │   │   ├── User.kt
+│   │   │   │   │   ├── Item.kt
+│   │   │   │   │   ├── Order.kt
+│   │   │   │   │   ├── TradeOffer.kt
+│   │   │   │   │   ├── Cart.kt
+│   │   │   │   │   ├── Coupon.kt
+│   │   │   │   │   ├── Timeslot.kt
+│   │   │   │   │   ├── StoreSettings.kt
+│   │   │   │   │   └── ...
+│   │   │   │   ├── repository/
+│   │   │   │   │   ├── AuthRepository.kt
+│   │   │   │   │   ├── InventoryRepository.kt
+│   │   │   │   │   ├── OrderRepository.kt
+│   │   │   │   │   └── CartRepository.kt
+│   │   │   │   └── local/
+│   │   │   │       ├── TokenStorage.kt        (EncryptedSharedPreferences)
+│   │   │   │       └── PreferencesStorage.kt  (DataStore)
+│   │   │   ├── domain/
+│   │   │   │   ├── model/                     (clean domain models if desired)
+│   │   │   │   └── usecase/                   (optional use cases)
+│   │   │   ├── ui/
+│   │   │   │   ├── theme/
+│   │   │   │   │   ├── Color.kt
+│   │   │   │   │   ├── Type.kt
+│   │   │   │   │   ├── Shape.kt
+│   │   │   │   │   └── Theme.kt
+│   │   │   │   ├── navigation/
+│   │   │   │   │   └── NavGraph.kt
+│   │   │   │   ├── components/                (shared Compose components)
+│   │   │   │   │   ├── ProductCard.kt
+│   │   │   │   │   ├── PrimaryButton.kt
+│   │   │   │   │   ├── StatusBadge.kt
+│   │   │   │   │   ├── LoadingSkeleton.kt
+│   │   │   │   │   └── ...
+│   │   │   │   ├── screens/
+│   │   │   │   │   ├── auth/
+│   │   │   │   │   │   ├── LoginScreen.kt
+│   │   │   │   │   │   ├── LoginViewModel.kt
+│   │   │   │   │   │   ├── RegisterStep1Screen.kt
+│   │   │   │   │   │   └── RegisterStep2Screen.kt
+│   │   │   │   │   ├── home/
+│   │   │   │   │   ├── shop/
+│   │   │   │   │   ├── product/
+│   │   │   │   │   ├── cart/
+│   │   │   │   │   ├── checkout/
+│   │   │   │   │   ├── orders/
+│   │   │   │   │   ├── settings/
+│   │   │   │   │   ├── admin/
+│   │   │   │   │   └── ...
+│   │   │   └── util/
+│   │   │       ├── TokenRefreshInterceptor.kt
+│   │   │       ├── NetworkResult.kt
+│   │   │       └── Extensions.kt
+│   │   ├── res/
+│   │   │   ├── font/                          (Montserrat, Open Sans ttf files)
+│   │   │   └── ...
+│   │   └── AndroidManifest.xml
+│   └── build.gradle.kts
+├── gradle/
+└── ...
+
+================================================================================
+19. WHAT DOES NOT APPLY TO MOBILE (differences from web)
+================================================================================
+
+1. NEXT.JS SERVER RENDERING: The web app uses server-side rendering for SEO.
+   Android has no concept of SSR. All data is fetched client-side.
+
+2. SERVER-SIDE COOKIES: The web uses an 'auth_hint' cookie to optimize SSR.
+   Not needed in the native app.
+
+3. SWR / STALE-WHILE-REVALIDATE: The web uses SWR for data fetching.
+   On Android, use Retrofit + coroutines + ViewModel for equivalent patterns.
+
+4. DISCORD DM NOTIFICATIONS: Replace entirely with FCM push notifications.
+   Build the client infra now; the backend FCM integration is a separate task.
+
+5. FRAMER MOTION animations: Replace with Compose AnimatedVisibility,
+   AnimatedContent, and spring/tween animations.
+
+6. NEXT/IMAGE OPTIMIZATION: Coil handles this natively on Android.
+
+7. RICH TEXT EDITOR (react-quill): For admin inventory creation, use a WebView
+   wrapping a minimal quill editor loaded from local HTML assets, OR use a
+   Compose markdown editor. Product descriptions are HTML and must be rendered
+   as HTML (use a WebView or HtmlText composable to render them in read mode).
+
+8. DRAG-AND-DROP for image reordering: Use ReorderableColumn from a Compose
+   DnD library (e.g., sh.calvin.reorderable or similar).
+
+9. CONFETTI on checkout success: Use a Compose particles library or KonfettiKit.
+
+10. PRINT STYLES: Not applicable to Android.
+
+11. ACCESS CODE flow is the same, just in a native UI instead of web forms.
+
+12. GOOGLE HOSTED DOMAIN RESTRICTION (@ucsc.edu): The Android Google Sign-In
+    SDK does not filter by hosted domain natively. You MUST still validate on
+    the server (the backend checks the hd claim). But you may want to show a
+    helpful error message on the client if login fails due to wrong domain.
+
+================================================================================
+END OF ANDROID PLANNING DOCUMENT
+================================================================================
