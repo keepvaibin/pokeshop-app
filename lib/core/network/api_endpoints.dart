@@ -16,7 +16,7 @@ abstract final class ApiEndpoints {
   static const String discordInitiate = '/auth/discord/initiate/';
   static const String pokemonIcons = '/auth/pokemon-icons/';
   static const String myStrikes = '/auth/my-strikes/';
-    static const String pushDevices = '/auth/push-devices/';
+  static const String pushDevices = '/auth/push-devices/';
 
   static const String items = '/inventory/items/';
   static const String itemFacets = '/inventory/items/facets/';
@@ -35,6 +35,7 @@ abstract final class ApiEndpoints {
   static const String wantedCards = '/inventory/wanted/';
 
   static const String cart = '/orders/cart/';
+  static const String cartCheck = '/orders/cart/check/';
   static const String cartSync = '/orders/cart/sync/';
   static const String checkout = '/orders/checkout/';
   static const String myOrders = '/orders/my-orders/';

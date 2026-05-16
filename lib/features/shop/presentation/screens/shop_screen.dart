@@ -35,7 +35,7 @@ class _ShopScreenState extends ConsumerState<ShopScreen> {
   void initState() {
     super.initState();
     _category = widget.initialCategory;
-    _sort = widget.initialSort;
+    _sort = widget.initialSort == 'stock-low' ? 'featured' : widget.initialSort;
   }
 
   @override
@@ -142,8 +142,6 @@ class _ShopScreenState extends ConsumerState<ShopScreen> {
                           DropdownMenuItem(
                               value: 'price-high', child: Text('Price high')),
                           DropdownMenuItem(value: 'name', child: Text('Name')),
-                          DropdownMenuItem(
-                              value: 'stock-low', child: Text('Stock low')),
                         ],
                         onChanged: (value) =>
                             setState(() => _sort = value ?? 'featured'),
@@ -162,37 +160,57 @@ class _ShopScreenState extends ConsumerState<ShopScreen> {
             ),
           ),
           Expanded(
-            child: items.when(
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (error, stackTrace) => Center(child: Text('$error')),
-              data: (products) {
-                if (products.isEmpty) {
-                  return Center(
-                      child: Text('No products found.',
-                          style: AppTextStyles.body()));
-                }
-                return LayoutBuilder(
-                  builder: (context, constraints) {
-                    final columns = constraints.maxWidth >= 1000
-                        ? 4
-                        : constraints.maxWidth >= 680
-                            ? 3
-                            : 2;
-                    return GridView.builder(
-                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: columns,
-                        mainAxisSpacing: 14,
-                        crossAxisSpacing: 14,
-                        childAspectRatio: 0.62,
-                      ),
-                      itemCount: products.length,
-                      itemBuilder: (context, index) =>
-                          ProductCard(item: products[index]),
-                    );
-                  },
-                );
+            child: RefreshIndicator(
+              onRefresh: () async {
+                ref.invalidate(shopItemsProvider(query));
+                ref.invalidate(shopCategoriesProvider);
               },
+              child: items.when(
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error: (error, stackTrace) => ListView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.all(24),
+                  children: [
+                    const SizedBox(height: 180),
+                    Center(child: Text('$error', textAlign: TextAlign.center)),
+                  ],
+                ),
+                data: (products) {
+                  if (products.isEmpty) {
+                    return ListView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: const EdgeInsets.all(24),
+                      children: [
+                        const SizedBox(height: 180),
+                        Center(
+                            child: Text('No products found.',
+                                style: AppTextStyles.body())),
+                      ],
+                    );
+                  }
+                  return LayoutBuilder(
+                    builder: (context, constraints) {
+                      final columns = constraints.maxWidth >= 1000
+                          ? 4
+                          : constraints.maxWidth >= 680
+                              ? 3
+                              : 2;
+                      return GridView.builder(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: columns,
+                          mainAxisSpacing: 14,
+                          crossAxisSpacing: 14,
+                          childAspectRatio: 0.62,
+                        ),
+                        itemCount: products.length,
+                        itemBuilder: (context, index) =>
+                            ProductCard(item: products[index]),
+                      );
+                    },
+                  );
+                },
+              ),
             ),
           ),
         ],

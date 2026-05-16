@@ -89,14 +89,23 @@ class _AdminSettingsScreenState extends ConsumerState<AdminSettingsScreen> {
       appBar: AppBar(title: const Text('Store Settings')),
       body: settings.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, stackTrace) => Center(child: Text('$error')),
+        error: (error, stackTrace) => RefreshIndicator(
+          onRefresh: _refreshSettings,
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.all(24),
+            children: [
+              const SizedBox(height: 180),
+              Center(
+                child: Text('$error', textAlign: TextAlign.center),
+              ),
+            ],
+          ),
+        ),
         data: (data) {
           _syncSettings(data);
           return RefreshIndicator(
-            onRefresh: () async {
-              ref.invalidate(storeSettingsProvider);
-              ref.invalidate(adminRecurringTimeslotsProvider);
-            },
+            onRefresh: _refreshSettings,
             child: LayoutBuilder(
               builder: (context, constraints) {
                 final maxWidth =
@@ -132,6 +141,11 @@ class _AdminSettingsScreenState extends ConsumerState<AdminSettingsScreen> {
         },
       ),
     );
+  }
+
+  Future<void> _refreshSettings() async {
+    ref.invalidate(storeSettingsProvider);
+    ref.invalidate(adminRecurringTimeslotsProvider);
   }
 
   Widget _buildStoreConfig(StoreSettings settings) {

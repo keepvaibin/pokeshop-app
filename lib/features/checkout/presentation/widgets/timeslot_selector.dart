@@ -106,7 +106,7 @@ class TimeslotSelector extends ConsumerWidget {
                               ],
                             ),
                           ),
-                          Text(slot.isFull ? 'FULL' : '${slot.spotsLeft} left',
+                          Text(slot.isFull ? 'FULL' : 'Available',
                               style: AppTextStyles.label(
                                   color: slot.isFull
                                       ? AppColors.pkmnRed

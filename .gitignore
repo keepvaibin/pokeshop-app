@@ -4,6 +4,7 @@
 .packages
 .idea/
 keys/
+android/key.properties
 build/
 coverage/
 ios/Flutter/ephemeral/

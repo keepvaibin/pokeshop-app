@@ -14,7 +14,7 @@ class AppException implements Exception {
 
     final data = error.response?.data;
     final message =
-        _messageFromData(data) ?? error.message ?? 'Something went wrong.';
+        _safeMessage(_messageFromData(data), error.response?.statusCode);
     return AppException(
       message,
       statusCode: error.response?.statusCode,
@@ -37,16 +37,61 @@ class AppException implements Exception {
     return null;
   }
 
+  static String _safeMessage(String? rawMessage, int? statusCode) {
+    final message = rawMessage?.trim() ?? '';
+    if (message.isEmpty || _looksPrivateOrTechnical(message)) {
+      return _fallbackForStatus(statusCode);
+    }
+    if ({
+      'daily_limit_exceeded',
+      'weekly_limit_exceeded',
+      'total_limit_exceeded'
+    }.contains(message)) {
+      return 'There is a limit for this item.';
+    }
+    return message;
+  }
+
+  static bool _looksPrivateOrTechnical(String message) {
+    final lower = message.toLowerCase();
+    return lower.contains('<html') ||
+        lower.contains('<div') ||
+        lower.contains('application error') ||
+        lower.contains('azurewebsites.net') ||
+        lower.contains('scm.') ||
+        lower.contains('api_base_url') ||
+        lower.contains('traceback') ||
+        lower.contains('stack trace') ||
+        lower.contains('exception') ||
+        lower.contains('django') ||
+        lower.length > 220;
+  }
+
+  static String _fallbackForStatus(int? statusCode) {
+    if (statusCode != null && statusCode >= 500) {
+      return 'The shop is having trouble right now. Pull down to try again.';
+    }
+    return switch (statusCode) {
+      400 => 'Please check the form and try again.',
+      401 => 'Please sign in again.',
+      403 => 'You do not have access to that.',
+      404 => 'That item is not available anymore.',
+      409 => 'Something changed. Pull down to refresh and try again.',
+      429 => 'Please wait a moment and try again.',
+      _ => 'Something went wrong. Please try again.',
+    };
+  }
+
   static String _networkMessage(DioException error) {
     return switch (error.type) {
       DioExceptionType.connectionTimeout ||
       DioExceptionType.sendTimeout ||
       DioExceptionType.receiveTimeout ||
       DioExceptionType.connectionError =>
-        'Could not reach the SCTCG API. Check your connection or API_BASE_URL.',
+        'Could not reach the shop. Check your connection and pull down to try again.',
       DioExceptionType.badCertificate =>
-        'The SCTCG API certificate could not be trusted.',
-      _ => error.message ?? 'Something went wrong.',
+        'Could not connect securely. Please try again in a moment.',
+      _ => 'Something went wrong. Please try again.',
     };
   }
 

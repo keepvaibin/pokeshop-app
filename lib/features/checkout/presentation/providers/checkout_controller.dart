@@ -114,8 +114,11 @@ class CheckoutController extends StateNotifier<CheckoutState> {
     state = state.copyWith(step: next);
   }
 
-  void setPayment(String value) =>
-      state = state.copyWith(paymentMethod: value, clearError: true);
+  void setPayment(String value) => state = state.copyWith(
+        paymentMethod: value,
+        tradeCards: value == 'trade' ? state.tradeCards : const [],
+        clearError: true,
+      );
   void setDelivery(String value) => state = state.copyWith(
       deliveryMethod: value,
       clearTimeslot: value != 'scheduled',
@@ -165,7 +168,8 @@ class CheckoutController extends StateNotifier<CheckoutState> {
           deliveryMethod: state.deliveryMethod,
           timeslot: state.timeslot,
           discordHandle: state.discordHandle,
-          tradeCards: state.tradeCards,
+          tradeCards:
+              state.paymentMethod == 'trade' ? state.tradeCards : const [],
           tradeMode: state.tradeMode,
           buyIfTradeDenied: state.buyIfTradeDenied,
           backupPaymentMethod: state.backupPaymentMethod,

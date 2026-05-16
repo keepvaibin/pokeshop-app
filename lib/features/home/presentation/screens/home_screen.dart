@@ -23,8 +23,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     return home.when(
       loading: () =>
           const Scaffold(body: Center(child: CircularProgressIndicator())),
-      error: (error, stackTrace) =>
-          Scaffold(body: Center(child: Text('$error'))),
+      error: (error, stackTrace) => Scaffold(
+        body: RefreshIndicator(
+          onRefresh: () async => ref.invalidate(homeDataProvider),
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.all(24),
+            children: [
+              const SizedBox(height: 240),
+              Center(child: Text('$error', textAlign: TextAlign.center)),
+            ],
+          ),
+        ),
+      ),
       data: (data) {
         return Scaffold(
           appBar: AppBar(
@@ -39,6 +50,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           body: RefreshIndicator(
             onRefresh: () async => ref.invalidate(homeDataProvider),
             child: ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
               padding: EdgeInsets.zero,
               children: [
                 PkAnnouncementBanner(message: data.settings.storeAnnouncement),

@@ -11,6 +11,7 @@ import '../../../../core/widgets/pk_input.dart';
 import '../../../../core/widgets/pokemon_avatar.dart';
 import '../../../auth/data/auth_repository.dart';
 import '../../../auth/presentation/providers/auth_controller.dart';
+import '../../../notifications/data/push_notification_service.dart';
 import '../../../shop/data/shop_repository.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -73,208 +74,255 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
     return Scaffold(
       appBar: AppBar(title: const Text('Profile Settings')),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          PkCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    PokemonAvatar(
-                      filename: user.pokemonIcon,
-                      fallbackText: user.displayName,
-                      size: 64,
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(user.displayName,
-                              style: AppTextStyles.heading(size: 20)),
-                          const SizedBox(height: 4),
-                          Text(user.email,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: AppTextStyles.body(size: 12)),
-                          const SizedBox(height: 4),
-                          Text(
-                              user.isAdmin
-                                  ? 'Admin account'
-                                  : 'Customer account',
-                              style: AppTextStyles.label(
-                                  color: user.isAdmin
-                                      ? AppColors.pkmnBlue
-                                      : AppColors.pkmnGrayDark)),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                if (user.strikeCount > 0) ...[
-                  const SizedBox(height: 10),
-                  Text(
-                      '${user.strikeCount} strike${user.strikeCount == 1 ? '' : 's'} on account',
-                      style: AppTextStyles.body(color: AppColors.pkmnRed)),
-                ],
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
-          PkCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Profile Picture', style: AppTextStyles.heading(size: 18)),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    PokemonAvatar(
-                      filename: user.pokemonIcon,
-                      fallbackText: user.displayName,
-                      size: 72,
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Text(
-                        user.pokemonIcon == null
-                            ? 'No profile picture selected.'
-                            : 'This icon appears on My SCTCG, receipts, and admin customer views.',
-                        style: AppTextStyles.body(size: 12),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Wrap(
-                  spacing: 10,
-                  runSpacing: 10,
-                  children: [
-                    PkButton(
-                      label: user.pokemonIcon == null ? 'Add' : 'Change',
-                      icon: const Icon(Icons.image_search_outlined),
-                      loading: _savingIcon,
-                      onPressed: _savingIcon
-                          ? null
-                          : () => _openPokemonPicker(icons, user.pokemonIcon),
-                    ),
-                    if (user.pokemonIcon != null)
-                      PkButton(
-                        label: 'Remove',
-                        icon: const Icon(Icons.close),
-                        variant: PkButtonVariant.secondary,
-                        loading: _savingIcon,
-                        onPressed:
-                            _savingIcon ? null : () => _updatePokemonIcon(null),
-                      ),
-                  ],
-                ),
-                icons.when(
-                  loading: () => Padding(
-                    padding: const EdgeInsets.only(top: 10),
-                    child: Text('Loading available images...',
-                        style: AppTextStyles.body(size: 12)),
-                  ),
-                  error: (error, stackTrace) => Padding(
-                    padding: const EdgeInsets.only(top: 10),
-                    child: Text('Profile images are unavailable right now.',
-                        style: AppTextStyles.body(color: AppColors.pkmnRed)),
-                  ),
-                  data: (_) => const SizedBox.shrink(),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
-          PkCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text('Profile Details', style: AppTextStyles.heading(size: 18)),
-                const SizedBox(height: 12),
-                PkInput(controller: _firstNameController, label: 'First Name'),
-                const SizedBox(height: 10),
-                PkInput(controller: _lastNameController, label: 'Last Name'),
-                const SizedBox(height: 10),
-                PkInput(controller: _nicknameController, label: 'Nickname'),
-                const SizedBox(height: 12),
-                PkButton(
-                  label: 'Save Profile',
-                  onPressed: () =>
-                      ref.read(authControllerProvider.notifier).updateProfile({
-                    'first_name': _firstNameController.text,
-                    'last_name': _lastNameController.text,
-                    'nickname': _nicknameController.text,
-                  }),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
-          settings.when(
-            loading: () => const SizedBox.shrink(),
-            error: (error, stackTrace) => const SizedBox.shrink(),
-            data: (data) => PkCard(
+      body: RefreshIndicator(
+        onRefresh: _refreshSettings,
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(16),
+          children: [
+            PkCard(
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Discord', style: AppTextStyles.heading(size: 18)),
-                  const SizedBox(height: 8),
-                  Text(
-                    user.discordId == null || user.discordId!.isEmpty
-                        ? 'Connect Discord so pickup coordination, reminders, and support messages reach the right account.'
-                        : 'Connected as ${user.discordHandle.isEmpty ? 'Discord user' : user.discordHandle}.',
-                    style: AppTextStyles.body(),
+                  Row(
+                    children: [
+                      PokemonAvatar(
+                        filename: user.pokemonIcon,
+                        fallbackText: user.displayName,
+                        size: 64,
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(user.displayName,
+                                style: AppTextStyles.heading(size: 20)),
+                            const SizedBox(height: 4),
+                            Text(user.email,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: AppTextStyles.body(size: 12)),
+                            const SizedBox(height: 4),
+                            Text(
+                                user.isAdmin
+                                    ? 'Admin account'
+                                    : 'Customer account',
+                                style: AppTextStyles.label(
+                                    color: user.isAdmin
+                                        ? AppColors.pkmnBlue
+                                        : AppColors.pkmnGrayDark)),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 12),
-                  if (user.discordId == null || user.discordId!.isEmpty)
-                    PkButton(
-                      label: 'Connect Discord',
-                      icon: const Icon(Icons.link),
-                      loading: _linkingDiscord,
-                      onPressed: _linkingDiscord ? null : _connectDiscord,
-                      expand: true,
-                    )
-                  else
-                    PkButton(
-                      label: 'Disconnect Discord',
-                      icon: const Icon(Icons.link_off),
-                      variant: PkButtonVariant.destructive,
-                      loading: _unlinkingDiscord,
-                      onPressed: _unlinkingDiscord ? null : _disconnectDiscord,
-                      expand: true,
-                    ),
-                  const SizedBox(height: 10),
-                  PkButton(
-                      label: 'Open Discord Invite',
-                      variant: PkButtonVariant.secondary,
-                      onPressed: () async {
-                        final url =
-                            data.ucscDiscordInvite ?? data.publicDiscordInvite;
-                        if (url != null) {
-                          await launchUrl(Uri.parse(url),
-                              mode: LaunchMode.externalApplication);
-                        }
-                      },
-                      expand: true),
+                  if (user.strikeCount > 0) ...[
+                    const SizedBox(height: 10),
+                    Text(
+                        '${user.strikeCount} strike${user.strikeCount == 1 ? '' : 's'} on account',
+                        style: AppTextStyles.body(color: AppColors.pkmnRed)),
+                  ],
                 ],
               ),
             ),
-          ),
-          const SizedBox(height: 12),
-          PkButton(
-            label: 'Log Out',
-            variant: PkButtonVariant.destructive,
-            onPressed: () async {
-              await ref.read(authControllerProvider.notifier).logout();
-              if (context.mounted) context.go('/login');
-            },
-          ),
-        ],
+            const SizedBox(height: 12),
+            PkCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Profile Picture',
+                      style: AppTextStyles.heading(size: 18)),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      PokemonAvatar(
+                        filename: user.pokemonIcon,
+                        fallbackText: user.displayName,
+                        size: 72,
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Text(
+                          user.pokemonIcon == null
+                              ? 'No profile picture selected.'
+                              : 'This icon appears on My SCTCG, receipts, and admin customer views.',
+                          style: AppTextStyles.body(size: 12),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    children: [
+                      PkButton(
+                        label: user.pokemonIcon == null ? 'Add' : 'Change',
+                        icon: const Icon(Icons.image_search_outlined),
+                        loading: _savingIcon,
+                        onPressed: _savingIcon
+                            ? null
+                            : () => _openPokemonPicker(icons, user.pokemonIcon),
+                      ),
+                      if (user.pokemonIcon != null)
+                        PkButton(
+                          label: 'Remove',
+                          icon: const Icon(Icons.close),
+                          variant: PkButtonVariant.secondary,
+                          loading: _savingIcon,
+                          onPressed: _savingIcon
+                              ? null
+                              : () => _updatePokemonIcon(null),
+                        ),
+                    ],
+                  ),
+                  icons.when(
+                    loading: () => Padding(
+                      padding: const EdgeInsets.only(top: 10),
+                      child: Text('Loading available images...',
+                          style: AppTextStyles.body(size: 12)),
+                    ),
+                    error: (error, stackTrace) => Padding(
+                      padding: const EdgeInsets.only(top: 10),
+                      child: Text('Profile images are unavailable right now.',
+                          style: AppTextStyles.body(color: AppColors.pkmnRed)),
+                    ),
+                    data: (_) => const SizedBox.shrink(),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            PkCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text('Profile Details',
+                      style: AppTextStyles.heading(size: 18)),
+                  const SizedBox(height: 12),
+                  PkInput(
+                      controller: _firstNameController, label: 'First Name'),
+                  const SizedBox(height: 10),
+                  PkInput(controller: _lastNameController, label: 'Last Name'),
+                  const SizedBox(height: 10),
+                  PkInput(controller: _nicknameController, label: 'Nickname'),
+                  const SizedBox(height: 12),
+                  PkButton(
+                    label: 'Save Profile',
+                    onPressed: () => ref
+                        .read(authControllerProvider.notifier)
+                        .updateProfile({
+                      'first_name': _firstNameController.text,
+                      'last_name': _lastNameController.text,
+                      'nickname': _nicknameController.text,
+                    }),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            PkCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text('Notifications', style: AppTextStyles.heading(size: 18)),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Manage order update alerts and phone-level notification access.',
+                    style: AppTextStyles.body(),
+                  ),
+                  const SizedBox(height: 12),
+                  PkButton(
+                    label: 'Enable Alerts',
+                    icon: const Icon(Icons.notifications_active_outlined),
+                    onPressed: _requestNotifications,
+                    expand: true,
+                  ),
+                  const SizedBox(height: 10),
+                  PkButton(
+                    label: 'Phone Settings',
+                    icon: const Icon(Icons.settings_outlined),
+                    variant: PkButtonVariant.secondary,
+                    onPressed: () => ref
+                        .read(pushNotificationServiceProvider)
+                        .openNotificationSettings(),
+                    expand: true,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            settings.when(
+              loading: () => const SizedBox.shrink(),
+              error: (error, stackTrace) => const SizedBox.shrink(),
+              data: (data) => PkCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text('Discord', style: AppTextStyles.heading(size: 18)),
+                    const SizedBox(height: 8),
+                    Text(
+                      user.discordId == null || user.discordId!.isEmpty
+                          ? 'Connect Discord so pickup coordination, reminders, and support messages reach the right account.'
+                          : 'Connected as ${user.discordHandle.isEmpty ? 'Discord user' : user.discordHandle}.',
+                      style: AppTextStyles.body(),
+                    ),
+                    const SizedBox(height: 12),
+                    if (user.discordId == null || user.discordId!.isEmpty)
+                      PkButton(
+                        label: 'Connect Discord',
+                        icon: const Icon(Icons.link),
+                        loading: _linkingDiscord,
+                        onPressed: _linkingDiscord ? null : _connectDiscord,
+                        expand: true,
+                      )
+                    else
+                      PkButton(
+                        label: 'Disconnect Discord',
+                        icon: const Icon(Icons.link_off),
+                        variant: PkButtonVariant.destructive,
+                        loading: _unlinkingDiscord,
+                        onPressed:
+                            _unlinkingDiscord ? null : _disconnectDiscord,
+                        expand: true,
+                      ),
+                    const SizedBox(height: 10),
+                    PkButton(
+                        label: 'Open Discord Invite',
+                        variant: PkButtonVariant.secondary,
+                        onPressed: () async {
+                          final url = data.ucscDiscordInvite ??
+                              data.publicDiscordInvite;
+                          if (url != null) {
+                            await launchUrl(Uri.parse(url),
+                                mode: LaunchMode.externalApplication);
+                          }
+                        },
+                        expand: true),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            PkButton(
+              label: 'Log Out',
+              variant: PkButtonVariant.destructive,
+              onPressed: () async {
+                await ref.read(authControllerProvider.notifier).logout();
+                if (context.mounted) context.go('/login');
+              },
+            ),
+          ],
+        ),
       ),
     );
+  }
+
+  Future<void> _refreshSettings() async {
+    ref.invalidate(storeSettingsProvider);
+    ref.invalidate(pokemonIconsProvider);
+    await ref.read(authControllerProvider.notifier).refreshUser();
   }
 
   Future<void> _openPokemonPicker(AsyncValue<List<PokemonIconOption>> icons,
@@ -318,6 +366,23 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       }
     } finally {
       if (mounted) setState(() => _savingIcon = false);
+    }
+  }
+
+  Future<void> _requestNotifications() async {
+    final service = ref.read(pushNotificationServiceProvider);
+    final result = await service.requestPermission();
+    if (result.canRegister) {
+      await service.registerDeviceIfAllowed();
+    }
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(result.message.isEmpty
+              ? 'Notification preference updated.'
+              : result.message),
+        ),
+      );
     }
   }
 

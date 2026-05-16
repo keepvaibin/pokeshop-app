@@ -33,6 +33,35 @@ class TradeInRepository {
     }
   }
 
+  Future<List<TradeCardSearchResult>> searchCards(String query) async {
+    final trimmed = query.trim();
+    if (trimmed.length < 2) return const [];
+    try {
+      final response = await _dio.get<dynamic>(
+        ApiEndpoints.tcgSearch,
+        queryParameters: {'q': trimmed, 'limit': 12},
+      );
+      return asMapList(response.data)
+          .map(TradeCardSearchResult.fromTcgJson)
+          .where((card) => card.name.trim().isNotEmpty)
+          .toList();
+    } on DioException catch (error) {
+      throw AppException.fromDio(error);
+    }
+  }
+
+  Future<List<TradeCardSearchResult>> wantedCards() async {
+    try {
+      final response = await _dio.get<dynamic>(ApiEndpoints.wantedCards);
+      return asMapList(response.data)
+          .map(TradeCardSearchResult.fromWantedJson)
+          .where((card) => card.name.trim().isNotEmpty)
+          .toList();
+    } on DioException catch (error) {
+      throw AppException.fromDio(error);
+    }
+  }
+
   Future<void> submit({
     required TimeslotSelection timeslot,
     required List<TradeCardEntry> cards,

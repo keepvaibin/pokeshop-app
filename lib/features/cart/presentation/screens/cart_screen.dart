@@ -8,6 +8,7 @@ import '../../../../core/widgets/pk_button.dart';
 import '../../../../core/widgets/pk_card.dart';
 import '../../../../core/widgets/pk_network_image.dart';
 import '../providers/cart_controller.dart';
+import '../widgets/cart_quantity_control.dart';
 
 class CartScreen extends ConsumerWidget {
   const CartScreen({super.key});
@@ -94,59 +95,66 @@ class CartScreen extends ConsumerWidget {
                         constraints: BoxConstraints(maxWidth: maxWidth),
                         child: PkCard(
                           child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                            crossAxisAlignment: CrossAxisAlignment.center,
                             children: [
                               SizedBox(
-                                width: 72,
-                                height: 72,
+                                width: 64,
+                                height: 64,
                                 child: PkNetworkImage(
                                   imageUrl: line.item.imageUrl,
                                   semanticLabel: line.item.title,
-                                  padding: const EdgeInsets.all(8),
+                                  padding: const EdgeInsets.all(6),
                                   borderRadius: BorderRadius.circular(10),
                                 ),
                               ),
-                              const SizedBox(width: 12),
+                              const SizedBox(width: 10),
                               Expanded(
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(line.item.title,
-                                        style: AppTextStyles.heading(size: 16)),
-                                    const SizedBox(height: 4),
+                                        style: AppTextStyles.heading(size: 13),
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis),
+                                    const SizedBox(height: 3),
                                     Text(
                                         '\$${line.item.price.toStringAsFixed(2)} each',
                                         style: AppTextStyles.body(size: 12)),
-                                    const SizedBox(height: 6),
                                     Text(
                                         'Line total: \$${line.subtotal.toStringAsFixed(2)}',
-                                        style: AppTextStyles.heading(size: 13)),
-                                    TextButton.icon(
-                                      onPressed: () =>
-                                          controller.remove(line.item.id),
-                                      icon: const Icon(Icons.delete_outline,
-                                          size: 18),
-                                      label: const Text('Remove'),
-                                      style: TextButton.styleFrom(
-                                          foregroundColor: AppColors.pkmnRed),
-                                    ),
+                                        style: AppTextStyles.heading(size: 12)),
                                   ],
                                 ),
                               ),
-                              IconButton(
-                                  onPressed: () => controller.updateQuantity(
-                                      line.item.id, line.quantity - 1),
-                                  icon: const Icon(Icons.remove)),
-                              Text('${line.quantity}',
-                                  style: AppTextStyles.heading(size: 16)),
-                              IconButton(
-                                  onPressed: line.item.stockQuantity > 0 &&
-                                          line.quantity >=
-                                              line.item.stockQuantity
-                                      ? null
-                                      : () => controller.updateQuantity(
-                                          line.item.id, line.quantity + 1),
-                                  icon: const Icon(Icons.add)),
+                              const SizedBox(width: 8),
+                              Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  CartQuantityControl(
+                                    item: line.item,
+                                    compact: true,
+                                    expand: false,
+                                  ),
+                                  const SizedBox(height: 6),
+                                  GestureDetector(
+                                    onTap: () =>
+                                        controller.remove(line.item.id),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        const Icon(Icons.delete_outline,
+                                            size: 14,
+                                            color: AppColors.pkmnRed),
+                                        const SizedBox(width: 3),
+                                        Text('Remove',
+                                            style: AppTextStyles.body(
+                                                size: 12,
+                                                color: AppColors.pkmnRed)),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ],
                           ),
                         ),

@@ -52,6 +52,7 @@ class ProductItem {
     this.setName = '',
     this.rarity = '',
     this.isActive = true,
+    this.availabilityStatus = '',
     this.purchaseLimitDaily,
     this.purchaseLimitWeekly,
     this.purchaseLimitLifetime,
@@ -69,11 +70,24 @@ class ProductItem {
   final String setName;
   final String rarity;
   final bool isActive;
+  final String availabilityStatus;
   final int? purchaseLimitDaily;
   final int? purchaseLimitWeekly;
   final int? purchaseLimitLifetime;
 
-  bool get inStock => stockQuantity > 0;
+  bool get inStock => availabilityStatus == 'active' || stockQuantity > 0;
+
+  int? get localQuantityLimit {
+    final candidates = <int>[
+      if (stockQuantity > 0) stockQuantity,
+      if (purchaseLimitDaily != null) purchaseLimitDaily!,
+      if (purchaseLimitWeekly != null) purchaseLimitWeekly!,
+      if (purchaseLimitLifetime != null) purchaseLimitLifetime!,
+    ];
+    if (candidates.isEmpty) return null;
+    candidates.sort();
+    return candidates.first;
+  }
 
   factory ProductItem.fromJson(Map<String, dynamic> json) {
     final images = asMapList(json['images']);
@@ -99,6 +113,7 @@ class ProductItem {
           asString(json['set_name'], fallback: asString(json['tcg_set_name'])),
       rarity: asString(json['rarity']),
       isActive: asBool(json['is_active'], fallback: true),
+      availabilityStatus: asString(json['availability_status']),
       purchaseLimitDaily:
           _optionalInt(json['purchase_limit_daily'] ?? json['max_per_user']),
       purchaseLimitWeekly:
@@ -127,6 +142,7 @@ class ProductItem {
         'set_name': setName,
         'rarity': rarity,
         'is_active': isActive,
+        'availability_status': availabilityStatus,
         'purchase_limit_daily': purchaseLimitDaily,
         'purchase_limit_weekly': purchaseLimitWeekly,
         'purchase_limit_lifetime': purchaseLimitLifetime,
@@ -276,6 +292,7 @@ class RecurringTimeslot {
     this.bookingsThisWeek = 0,
     this.pickupDate,
     this.isActive = true,
+    this.isAvailable = true,
   });
 
   final int id;
@@ -287,9 +304,10 @@ class RecurringTimeslot {
   final int bookingsThisWeek;
   final String? pickupDate;
   final bool isActive;
+  final bool isAvailable;
 
   int get spotsLeft => maxBookings - bookingsThisWeek;
-  bool get isFull => spotsLeft <= 0;
+  bool get isFull => !isAvailable;
 
   factory RecurringTimeslot.fromJson(Map<String, dynamic> json) {
     return RecurringTimeslot(
@@ -302,6 +320,9 @@ class RecurringTimeslot {
       bookingsThisWeek: asInt(json['bookings_this_week']),
       pickupDate: json['pickup_date']?.toString(),
       isActive: asBool(json['is_active'], fallback: true),
+      isAvailable: json.containsKey('is_available')
+          ? asBool(json['is_available'], fallback: true)
+          : asInt(json['max_bookings']) > asInt(json['bookings_this_week']),
     );
   }
 }
@@ -527,6 +548,96 @@ class TradeCardEntry {
         'base_market_price': baseMarketPrice,
         'tcgplayer_url': tcgplayerUrl,
       };
+}
+
+class TradeCardSearchResult {
+  const TradeCardSearchResult({
+    required this.name,
+    this.setName = '',
+    this.cardNumber = '',
+    this.rarity = '',
+    this.imageUrl = '',
+    this.marketPrice = 0,
+    this.tcgProductId,
+    this.tcgSubType = '',
+    this.tcgplayerUrl = '',
+    this.source = 'search',
+  });
+
+  final String name;
+  final String setName;
+  final String cardNumber;
+  final String rarity;
+  final String imageUrl;
+  final double marketPrice;
+  final int? tcgProductId;
+  final String tcgSubType;
+  final String tcgplayerUrl;
+  final String source;
+
+  String get subtitle {
+    final parts = [
+      if (setName.isNotEmpty) setName,
+      if (cardNumber.isNotEmpty) cardNumber,
+      if (rarity.isNotEmpty) rarity,
+    ];
+    return parts.join(' - ');
+  }
+
+  TradeCardEntry toEntry() => TradeCardEntry(
+        cardName: name,
+        estimatedValue: marketPrice,
+        setName: setName,
+        cardNumber: cardNumber,
+        imageUrl: imageUrl,
+        tcgProductId: tcgProductId,
+        tcgSubType: tcgSubType,
+        baseMarketPrice: marketPrice > 0 ? marketPrice : null,
+        tcgplayerUrl: tcgplayerUrl,
+      );
+
+  factory TradeCardSearchResult.fromTcgJson(Map<String, dynamic> json) {
+    return TradeCardSearchResult(
+      name: asString(json['name'], fallback: 'Unknown card'),
+      setName:
+          asString(json['set_name'], fallback: asString(json['group_name'])),
+      cardNumber:
+          asString(json['number'], fallback: asString(json['card_number'])),
+      rarity: asString(json['rarity']),
+      imageUrl: asString(json['image_large'],
+          fallback: asString(json['image_small'],
+              fallback: asString(json['image_url']))),
+      marketPrice: asDouble(json['market_price']),
+      tcgProductId:
+          asInt(json['product_id']) > 0 ? asInt(json['product_id']) : null,
+      tcgSubType: asString(json['sub_type_name'],
+          fallback: asString(json['tcg_price_sub_type'])),
+      tcgplayerUrl: asString(json['tcgplayer_url']),
+      source: 'search',
+    );
+  }
+
+  factory TradeCardSearchResult.fromWantedJson(Map<String, dynamic> json) {
+    final tcgData = asMap(json['tcg_card_data']);
+    final images = asMapList(json['images']);
+    final firstImage = _firstImageUrl(images);
+    return TradeCardSearchResult(
+      name: asString(json['name'], fallback: asString(tcgData['name'])),
+      setName: asString(tcgData['set_name'],
+          fallback: asString(tcgData['group_name'])),
+      cardNumber: asString(tcgData['card_number']),
+      rarity: asString(tcgData['rarity']),
+      imageUrl: _firstNonBlankString([firstImage, tcgData['image_url']]) ?? '',
+      marketPrice: asDouble(json['estimated_value'],
+          fallback: asDouble(tcgData['market_price'])),
+      tcgProductId: asInt(tcgData['product_id']) > 0
+          ? asInt(tcgData['product_id'])
+          : null,
+      tcgSubType: asString(tcgData['sub_type_name']),
+      tcgplayerUrl: asString(tcgData['tcgplayer_url']),
+      source: 'wanted',
+    );
+  }
 }
 
 class WalletSummary {

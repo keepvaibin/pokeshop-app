@@ -5,11 +5,10 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/models/api_models.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
-import '../../../../core/widgets/pk_button.dart';
 import '../../../../core/widgets/pk_card.dart';
 import '../../../../core/widgets/pk_network_image.dart';
 import '../../../../core/widgets/pk_pill.dart';
-import '../../../cart/presentation/providers/cart_controller.dart';
+import '../../../cart/presentation/widgets/cart_quantity_control.dart';
 
 class ProductCard extends ConsumerWidget {
   const ProductCard({required this.item, this.compact = false, super.key});
@@ -55,18 +54,7 @@ class ProductCard extends ConsumerWidget {
                         style: AppTextStyles.heading(
                             size: 16, color: AppColors.pkmnBlueDark)),
                     const SizedBox(height: 10),
-                    PkButton(
-                      label: item.inStock ? 'Add' : 'Sold Out',
-                      variant: item.inStock
-                          ? PkButtonVariant.primary
-                          : PkButtonVariant.secondary,
-                      onPressed: item.inStock
-                          ? () => ref
-                              .read(cartControllerProvider.notifier)
-                              .add(item)
-                          : null,
-                      expand: true,
-                    ),
+                    CartQuantityControl(item: item, compact: compact),
                   ],
                 ),
               ),

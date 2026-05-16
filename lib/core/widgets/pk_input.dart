@@ -12,6 +12,7 @@ class PkInput extends StatelessWidget {
     this.maxLines = 1,
     this.textInputAction,
     this.onChanged,
+    this.onSubmitted,
     this.onTap,
     this.readOnly = false,
     this.suffixIcon,
@@ -26,6 +27,7 @@ class PkInput extends StatelessWidget {
   final int maxLines;
   final TextInputAction? textInputAction;
   final ValueChanged<String>? onChanged;
+  final ValueChanged<String>? onSubmitted;
   final VoidCallback? onTap;
   final bool readOnly;
   final Widget? suffixIcon;
@@ -39,6 +41,7 @@ class PkInput extends StatelessWidget {
       maxLines: obscureText ? 1 : maxLines,
       textInputAction: textInputAction,
       onChanged: onChanged,
+      onSubmitted: onSubmitted,
       onTap: onTap,
       readOnly: readOnly,
       decoration: AppDecorations.inputDecoration(label: label, hint: hint)

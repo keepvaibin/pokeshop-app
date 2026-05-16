@@ -7,7 +7,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../core/models/api_models.dart';
 import '../../../../core/network/api_endpoints.dart';
+import '../../../../core/network/json_helpers.dart';
 import '../../../../core/network/network_providers.dart';
+
+enum CartChangeResult { updated, limited }
 
 class CartState {
   const CartState(
@@ -19,6 +22,12 @@ class CartState {
 
   int get totalQuantity => lines.fold(0, (sum, line) => sum + line.quantity);
   double get subtotal => lines.fold(0, (sum, line) => sum + line.subtotal);
+  int quantityFor(int itemId) {
+    for (final line in lines) {
+      if (line.item.id == itemId) return line.quantity;
+    }
+    return 0;
+  }
 
   CartState copyWith(
       {List<CartLine>? lines,
@@ -47,6 +56,7 @@ class CartController extends StateNotifier<CartState> {
   CartController(this._dio, this._ref) : super(const CartState());
 
   static const _storageKey = 'pokeshop_cart_v1';
+  static const limitMessage = 'There is a limit for this item.';
 
   final Dio _dio;
   final Ref _ref;
@@ -64,37 +74,60 @@ class CartController extends StateNotifier<CartState> {
             .toList());
   }
 
-  Future<void> add(ProductItem item, {int quantity = 1}) async {
+  Future<CartChangeResult> add(ProductItem item, {int quantity = 1}) async {
+    final existing =
+        state.lines.where((line) => line.item.id == item.id).firstOrNull;
+    return setQuantity(item, (existing?.quantity ?? 0) + quantity);
+  }
+
+  Future<CartChangeResult> setQuantity(ProductItem item, int quantity) async {
+    if (quantity <= 0) {
+      final next =
+          state.lines.where((line) => line.item.id != item.id).toList();
+      state = state.copyWith(lines: next, clearError: true);
+      await _persist();
+      return CartChangeResult.updated;
+    }
+
+    if (!item.inStock) {
+      state = state.copyWith(errorMessage: limitMessage);
+      return CartChangeResult.limited;
+    }
+
+    final localLimit = item.localQuantityLimit;
+    if (localLimit != null && quantity > localLimit) {
+      state = state.copyWith(errorMessage: limitMessage);
+      return CartChangeResult.limited;
+    }
+
+    final serverAllowed = await _serverAllows(item.id, quantity);
+    if (!serverAllowed) {
+      state = state.copyWith(errorMessage: limitMessage);
+      return CartChangeResult.limited;
+    }
+
     final existing =
         state.lines.where((line) => line.item.id == item.id).firstOrNull;
     final lines = [...state.lines];
-    final maxQuantity = item.stockQuantity <= 0 ? quantity : item.stockQuantity;
     if (existing == null) {
-      lines.add(CartLine(item: item, quantity: quantity.clamp(1, maxQuantity)));
+      lines.add(CartLine(item: item, quantity: quantity));
     } else {
       final index = lines.indexOf(existing);
-      lines[index] = existing.copyWith(
-          quantity: (existing.quantity + quantity).clamp(1, maxQuantity));
+      lines[index] = existing.copyWith(item: item, quantity: quantity);
     }
     state = state.copyWith(lines: lines, clearError: true);
     await _persist();
+    return CartChangeResult.updated;
   }
 
-  Future<void> updateQuantity(int itemId, int quantity) async {
-    final next = state.lines
-        .map((line) {
-          if (line.item.id != itemId) return line;
-          final maxQuantity =
-              line.item.stockQuantity <= 0 ? quantity : line.item.stockQuantity;
-          return line.copyWith(quantity: quantity.clamp(0, maxQuantity));
-        })
-        .where((line) => line.quantity > 0)
-        .toList();
-    state = state.copyWith(lines: next, clearError: true);
-    await _persist();
+  Future<CartChangeResult> updateQuantity(int itemId, int quantity) async {
+    final existing =
+        state.lines.where((line) => line.item.id == itemId).firstOrNull;
+    if (existing == null) return CartChangeResult.updated;
+    return setQuantity(existing.item, quantity);
   }
 
-  Future<void> remove(int itemId) => updateQuantity(itemId, 0);
+  Future<CartChangeResult> remove(int itemId) => updateQuantity(itemId, 0);
 
   Future<void> clear() async {
     state = state.copyWith(lines: const [], clearError: true);
@@ -114,6 +147,18 @@ class CartController extends StateNotifier<CartState> {
           syncing: false,
           errorMessage:
               error.response?.data?.toString() ?? 'Cart sync failed.');
+    }
+  }
+
+  Future<bool> _serverAllows(int itemId, int quantity) async {
+    try {
+      final response = await _dio.post<Map<String, dynamic>>(
+        ApiEndpoints.cartCheck,
+        data: {'item_id': itemId, 'quantity': quantity},
+      );
+      return asBool(response.data?['allowed'], fallback: true);
+    } on DioException {
+      return true;
     }
   }
 

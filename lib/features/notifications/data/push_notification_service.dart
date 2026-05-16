@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/api_endpoints.dart';
@@ -21,12 +22,15 @@ class PushPermissionResult {
       state == PushPermissionState.provisional;
 }
 
-final pushNotificationServiceProvider = Provider<PushNotificationService>((ref) {
+final pushNotificationServiceProvider =
+    Provider<PushNotificationService>((ref) {
   return PushNotificationService(dio: ref.watch(dioProvider));
 });
 
 class PushNotificationService {
   PushNotificationService({required Dio dio}) : _dio = dio;
+
+  static const _settingsChannel = MethodChannel('pokeshop_app/settings');
 
   final Dio _dio;
   StreamSubscription<String>? _tokenRefreshSubscription;
@@ -107,6 +111,14 @@ class PushNotificationService {
       );
     } catch (error) {
       debugPrint('Push device unregister skipped: $error');
+    }
+  }
+
+  Future<void> openNotificationSettings() async {
+    try {
+      await _settingsChannel.invokeMethod<void>('openNotificationSettings');
+    } catch (error) {
+      debugPrint('Open notification settings skipped: $error');
     }
   }
 
