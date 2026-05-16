@@ -1,0 +1,16 @@
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.idea/
+keys/
+build/
+coverage/
+ios/Flutter/ephemeral/
+android/.gradle/
+android/app/debug/
+android/app/profile/
+android/app/release/
+*.iml
+*.log
+.DS_Store
