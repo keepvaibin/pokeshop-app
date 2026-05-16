@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
@@ -12,11 +13,34 @@ import '../../../../core/widgets/pk_card.dart';
 import '../../../../core/widgets/pk_status_badge.dart';
 import '../../data/admin_repository.dart';
 
-class AdminDispatchScreen extends ConsumerWidget {
+class AdminDispatchScreen extends ConsumerStatefulWidget {
   const AdminDispatchScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<AdminDispatchScreen> createState() =>
+      _AdminDispatchScreenState();
+}
+
+class _AdminDispatchScreenState extends ConsumerState<AdminDispatchScreen> {
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer.periodic(
+      const Duration(seconds: 15),
+      (_) => ref.invalidate(adminDispatchCenterProvider),
+    );
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final bundle = ref.watch(adminDispatchCenterProvider);
     return Scaffold(
       appBar: AppBar(
@@ -113,7 +137,7 @@ class _DispatchTabLabel extends StatelessWidget {
       fit: BoxFit.scaleDown,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 3),
-        child: Text('$label ($count)', maxLines: 1),
+        child: Text(label, maxLines: 1),
       ),
     );
   }

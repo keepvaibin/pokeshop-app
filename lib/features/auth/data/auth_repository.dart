@@ -61,6 +61,8 @@ class AuthRepository {
   final SecureTokenStorage _tokenStorage;
   final GoogleSignIn _googleSignIn;
 
+  String? get googlePhotoUrl => _googleSignIn.currentUser?.photoUrl;
+
   static String? get _platformClientId {
     if (kIsWeb) {
       return _googleWebClientId.isEmpty ? null : _googleWebClientId;

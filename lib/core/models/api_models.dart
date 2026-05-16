@@ -184,6 +184,9 @@ class StoreSettings {
     this.ordersDisabled = false,
     this.ucscDiscordInvite,
     this.publicDiscordInvite,
+    this.standardLegalMarks = const [],
+    this.standardIllegalMarks = const [],
+    this.regulationMarkOptions = const [],
   });
 
   final String storeAnnouncement;
@@ -204,6 +207,9 @@ class StoreSettings {
   final bool ordersDisabled;
   final String? ucscDiscordInvite;
   final String? publicDiscordInvite;
+  final List<String> standardLegalMarks;
+  final List<String> standardIllegalMarks;
+  final List<String> regulationMarkOptions;
 
   factory StoreSettings.fromJson(Map<String, dynamic> json) {
     return StoreSettings(
@@ -229,8 +235,16 @@ class StoreSettings {
       ordersDisabled: asBool(json['orders_disabled']),
       ucscDiscordInvite: json['ucsc_discord_invite']?.toString(),
       publicDiscordInvite: json['public_discord_invite']?.toString(),
+      standardLegalMarks: _asStringList(json['standard_legal_marks']),
+      standardIllegalMarks: _asStringList(json['standard_illegal_marks']),
+      regulationMarkOptions: _asStringList(json['regulation_mark_options']),
     );
   }
+}
+
+List<String> _asStringList(dynamic value) {
+  if (value is List) return value.map((e) => e.toString()).toList();
+  return const [];
 }
 
 class RecurringTimeslot {

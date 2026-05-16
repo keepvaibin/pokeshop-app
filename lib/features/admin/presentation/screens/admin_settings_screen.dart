@@ -25,6 +25,7 @@ class AdminSettingsScreen extends ConsumerStatefulWidget {
 
 class _AdminSettingsScreenState extends ConsumerState<AdminSettingsScreen> {
   final _announcementController = TextEditingController();
+  final _announcementExpiresAtController = TextEditingController();
   final _tradeCreditController = TextEditingController();
   final _tradeCashController = TextEditingController();
   final _maxTradeCardsController = TextEditingController();
@@ -55,11 +56,15 @@ class _AdminSettingsScreenState extends ConsumerState<AdminSettingsScreen> {
   bool _savingTimeslot = false;
   bool _linkingDiscord = false;
   bool _unlinkingDiscord = false;
+  List<String> _standardLegalMarks = const [];
+  List<String> _standardIllegalMarks = const [];
+  List<String> _regulationMarkOptions = const [];
   String? _syncedSettingsKey;
 
   @override
   void dispose() {
     _announcementController.dispose();
+    _announcementExpiresAtController.dispose();
     _tradeCreditController.dispose();
     _tradeCashController.dispose();
     _maxTradeCardsController.dispose();
@@ -135,13 +140,19 @@ class _AdminSettingsScreenState extends ConsumerState<AdminSettingsScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text('Store Config', style: AppTextStyles.heading(size: 20)),
-          const SizedBox(height: 12),
+          const SizedBox(height: 16),
           PkInput(
             controller: _announcementController,
             label: 'Store Announcement',
             maxLines: 3,
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 14),
+          PkInput(
+            controller: _announcementExpiresAtController,
+            label: 'Announcement Expires At (ISO date)',
+            hint: '2026-06-01T00:00:00Z',
+          ),
+          const SizedBox(height: 14),
           _NumberRow(
             first: PkInput(
               controller: _tradeCreditController,
@@ -154,27 +165,92 @@ class _AdminSettingsScreenState extends ConsumerState<AdminSettingsScreen> {
               keyboardType: TextInputType.number,
             ),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 14),
           PkInput(
             controller: _maxTradeCardsController,
             label: 'Max Trade Cards / Order',
             keyboardType: TextInputType.number,
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 14),
           PkInput(controller: _webhookController, label: 'Discord Webhook URL'),
-          const SizedBox(height: 10),
+          const SizedBox(height: 14),
           PkInput(
               controller: _ucscInviteController, label: 'UCSC Discord Invite'),
-          const SizedBox(height: 10),
+          const SizedBox(height: 14),
           PkInput(
               controller: _publicInviteController,
               label: 'Public Discord Invite'),
+          const SizedBox(height: 4),
           SwitchListTile.adaptive(
             contentPadding: EdgeInsets.zero,
             value: _footerNewsletter,
             onChanged: (value) => setState(() => _footerNewsletter = value),
             title: const Text('Show footer newsletter'),
           ),
+          const Divider(height: 24),
+          Text('Standard Format Regulation Marks',
+              style: AppTextStyles.heading(size: 16)),
+          const SizedBox(height: 4),
+          Text(
+            'Mark each regulation letter as Legal, Illegal, or leave unset (neutral).',
+            style: AppTextStyles.body(size: 12, color: AppColors.pkmnGrayDark),
+          ),
+          const SizedBox(height: 10),
+          ..._regulationMarkOptions.map((mark) {
+            final isLegal = _standardLegalMarks.contains(mark);
+            final isIllegal = _standardIllegalMarks.contains(mark);
+            final current = isLegal
+                ? 'legal'
+                : isIllegal
+                    ? 'illegal'
+                    : 'neutral';
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: 28,
+                    child: Text(mark,
+                        style: AppTextStyles.heading(size: 15),
+                        textAlign: TextAlign.center),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: SegmentedButton<String>(
+                      segments: const [
+                        ButtonSegment(
+                            value: 'legal',
+                            label: Text('Legal'),
+                            icon: Icon(Icons.check_circle_outline, size: 14)),
+                        ButtonSegment(
+                            value: 'neutral',
+                            label: Text('Unset'),
+                            icon: Icon(Icons.remove_circle_outline, size: 14)),
+                        ButtonSegment(
+                            value: 'illegal',
+                            label: Text('Illegal'),
+                            icon: Icon(Icons.cancel_outlined, size: 14)),
+                      ],
+                      selected: {current},
+                      onSelectionChanged: (sel) {
+                        final chosen = sel.first;
+                        setState(() {
+                          _standardLegalMarks = [
+                            ..._standardLegalMarks.where((m) => m != mark),
+                            if (chosen == 'legal') mark,
+                          ];
+                          _standardIllegalMarks = [
+                            ..._standardIllegalMarks.where((m) => m != mark),
+                            if (chosen == 'illegal') mark,
+                          ];
+                        });
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }),
           const SizedBox(height: 8),
           PkButton(
             label: 'Save Store Config',
@@ -419,6 +495,7 @@ class _AdminSettingsScreenState extends ConsumerState<AdminSettingsScreen> {
   void _syncSettings(StoreSettings settings) {
     final key = Object.hashAll([
       settings.storeAnnouncement,
+      settings.announcementExpiresAt,
       settings.tradeCreditPercentage,
       settings.tradeCashPercentage,
       settings.maxTradeCardsPerOrder,
@@ -435,10 +512,13 @@ class _AdminSettingsScreenState extends ConsumerState<AdminSettingsScreen> {
       settings.payCash,
       settings.payTrade,
       settings.tradeInsEnabled,
+      Object.hashAll(settings.standardLegalMarks),
+      Object.hashAll(settings.standardIllegalMarks),
     ]).toString();
     if (_syncedSettingsKey == key) return;
     _syncedSettingsKey = key;
     _announcementController.text = settings.storeAnnouncement;
+    _announcementExpiresAtController.text = settings.announcementExpiresAt ?? '';
     _tradeCreditController.text =
         settings.tradeCreditPercentage.toStringAsFixed(0);
     _tradeCashController.text = settings.tradeCashPercentage.toStringAsFixed(0);
@@ -456,6 +536,13 @@ class _AdminSettingsScreenState extends ConsumerState<AdminSettingsScreen> {
     _payCash = settings.payCash;
     _payTrade = settings.payTrade;
     _tradeInsEnabled = settings.tradeInsEnabled;
+    _standardLegalMarks = List<String>.from(settings.standardLegalMarks);
+    _standardIllegalMarks = List<String>.from(settings.standardIllegalMarks);
+    if (settings.regulationMarkOptions.isNotEmpty) {
+      _regulationMarkOptions = settings.regulationMarkOptions;
+    } else if (_regulationMarkOptions.isEmpty) {
+      _regulationMarkOptions = const ['G', 'H', 'I', 'J'];
+    }
   }
 
   Future<void> _saveStoreConfig() async {
@@ -463,6 +550,8 @@ class _AdminSettingsScreenState extends ConsumerState<AdminSettingsScreen> {
     try {
       await ref.read(adminRepositoryProvider).updateStoreSettings({
         'store_announcement': _announcementController.text.trim(),
+        'announcement_expires_at':
+            _emptyToNull(_announcementExpiresAtController.text),
         'trade_credit_percentage':
             _doubleValue(_tradeCreditController.text, 85),
         'trade_cash_percentage': _doubleValue(_tradeCashController.text, 65),
@@ -472,6 +561,8 @@ class _AdminSettingsScreenState extends ConsumerState<AdminSettingsScreen> {
         'ucsc_discord_invite': _emptyToNull(_ucscInviteController.text),
         'public_discord_invite': _emptyToNull(_publicInviteController.text),
         'show_footer_newsletter': _footerNewsletter,
+        'standard_legal_marks': _standardLegalMarks,
+        'standard_illegal_marks': _standardIllegalMarks,
       });
       ref.invalidate(storeSettingsProvider);
       _showSnack('Store config saved.');
@@ -676,18 +767,10 @@ class _SectionPicker extends StatelessWidget {
   Widget build(BuildContext context) {
     return SegmentedButton<int>(
       segments: const [
-        ButtonSegment(
-            value: 0, label: Text('Store'), icon: Icon(Icons.tune_outlined)),
-        ButtonSegment(
-            value: 1,
-            label: Text('Controls'),
-            icon: Icon(Icons.toggle_on_outlined)),
-        ButtonSegment(
-            value: 2,
-            label: Text('Slots'),
-            icon: Icon(Icons.calendar_month_outlined)),
-        ButtonSegment(
-            value: 3, label: Text('Profile'), icon: Icon(Icons.person_outline)),
+        ButtonSegment(value: 0, label: Text('Store')),
+        ButtonSegment(value: 1, label: Text('Controls')),
+        ButtonSegment(value: 2, label: Text('Slots')),
+        ButtonSegment(value: 3, label: Text('Profile')),
       ],
       selected: {selected},
       onSelectionChanged: (values) => onSelected(values.first),

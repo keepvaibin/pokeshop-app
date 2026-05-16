@@ -133,7 +133,7 @@ class _Kpi extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: () => context.go(path),
+      onTap: () => context.push(path),
       child: PkCard(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -178,7 +178,7 @@ class _DispatchQueue extends StatelessWidget {
                   child: Text('Dispatch Queue',
                       style: AppTextStyles.heading(size: 18))),
               TextButton(
-                  onPressed: () => context.go('/admin/dispatch'),
+                  onPressed: () => context.push('/admin/dispatch'),
                   child: const Text('View all')),
             ],
           ),
@@ -303,22 +303,22 @@ class _AdminActions extends StatelessWidget {
               PkButton(
                   label: 'Orders',
                   icon: const Icon(Icons.receipt_long),
-                  onPressed: () => context.go('/admin/menu'),
+                  onPressed: () => context.push('/admin/menu'),
                   variant: PkButtonVariant.secondary),
               PkButton(
                   label: 'Shop View',
                   icon: const Icon(Icons.storefront),
-                  onPressed: () => context.go('/admin/shop'),
+                  onPressed: () => context.push('/admin/shop'),
                   variant: PkButtonVariant.secondary),
               PkButton(
                   label: 'Trade-Ins',
                   icon: const Icon(Icons.style),
-                  onPressed: () => context.go('/admin/dispatch'),
+                  onPressed: () => context.push('/admin/dispatch'),
                   variant: PkButtonVariant.secondary),
               PkButton(
                   label: 'Settings',
                   icon: const Icon(Icons.tune),
-                  onPressed: () => context.go('/admin/settings'),
+                  onPressed: () => context.push('/admin/settings'),
                   variant: PkButtonVariant.secondary),
             ],
           ),

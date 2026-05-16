@@ -48,8 +48,6 @@ class MySctcgScreen extends ConsumerWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        _ProfileHeader(userName: user.displayName),
-                        const SizedBox(height: 12),
                         PkCard(
                           child: Row(
                             children: [
@@ -113,37 +111,6 @@ class MySctcgScreen extends ConsumerWidget {
     final value = displayName.trim();
     if (value.isEmpty) return 'there';
     return value.split(RegExp(r'\s+')).first;
-  }
-}
-
-class _ProfileHeader extends StatelessWidget {
-  const _ProfileHeader({required this.userName});
-
-  final String userName;
-
-  @override
-  Widget build(BuildContext context) {
-    return PkCard(
-      child: Row(
-        children: [
-          const Icon(Icons.local_mall_outlined,
-              color: AppColors.pkmnBlue, size: 30),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('My SCTCG', style: AppTextStyles.heading(size: 20)),
-                const SizedBox(height: 3),
-                Text(
-                    'Orders, wallet, profile, and pickup readiness for $userName.',
-                    style: AppTextStyles.body(size: 12)),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
   }
 }
 

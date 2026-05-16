@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 
 import '../../../../core/network/json_helpers.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -224,10 +225,27 @@ class _UserCard extends StatelessWidget {
                               '\$${asDouble(user['trade_credit_balance']).toStringAsFixed(2)}'),
                       _TinyStat(
                           label: 'Strikes',
-                          value: '${asInt(user['strike_count'])}'),
+                          value: '${asInt(user['strike_count'])}',
+                          valueColor: asInt(user['strike_count']) > 0
+                              ? AppColors.pkmnRed
+                              : null),
                       _TinyStat(
                           label: 'Active',
                           value: '${asInt(user['current_order_count'])}'),
+                      if (asBool(user['is_admin']))
+                        _TinyStat(
+                            label: 'Admin',
+                            value: '',
+                            backgroundColor:
+                                AppColors.pkmnBlue.withValues(alpha: 0.15),
+                            valueColor: AppColors.pkmnBlue),
+                      if (asBool(user['is_restricted']))
+                        _TinyStat(
+                            label: 'Restricted',
+                            value: '',
+                            backgroundColor:
+                                AppColors.pkmnRed.withValues(alpha: 0.15),
+                            valueColor: AppColors.pkmnRed),
                     ],
                   ),
                 ],
@@ -242,19 +260,30 @@ class _UserCard extends StatelessWidget {
 }
 
 class _TinyStat extends StatelessWidget {
-  const _TinyStat({required this.label, required this.value});
+  const _TinyStat(
+      {required this.label,
+      required this.value,
+      this.valueColor,
+      this.backgroundColor});
 
   final String label;
   final String value;
+  final Color? valueColor;
+  final Color? backgroundColor;
 
   @override
   Widget build(BuildContext context) {
+    final display =
+        (label.isNotEmpty && value.isNotEmpty) ? '$label $value' : label + value;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
       decoration: BoxDecoration(
-          color: AppColors.pkmnGrayLight,
+          color: backgroundColor ?? AppColors.pkmnGrayLight,
           borderRadius: BorderRadius.circular(8)),
-      child: Text('$label $value', style: AppTextStyles.body(size: 11)),
+      child: Text(display,
+          style: AppTextStyles.body(
+              size: 11,
+              color: valueColor ?? AppColors.pkmnGray)),
     );
   }
 }
@@ -321,6 +350,18 @@ class _UserDetailSheetState extends ConsumerState<_UserDetailSheet> {
                               style: AppTextStyles.heading(size: 20)),
                           Text(asString(user['email']),
                               style: AppTextStyles.body(size: 13)),
+                          if (asString(user['date_joined']).isNotEmpty)
+                            Text(
+                                'Joined: ${_fmtDate(asString(user['date_joined']))}',
+                                style: AppTextStyles.body(
+                                    size: 11,
+                                    color: AppColors.pkmnGrayDark)),
+                          if (asString(user['last_login']).isNotEmpty)
+                            Text(
+                                'Last login: ${_fmtDate(asString(user['last_login']))}',
+                                style: AppTextStyles.body(
+                                    size: 11,
+                                    color: AppColors.pkmnGrayDark)),
                         ],
                       ),
                     ),
@@ -353,6 +394,13 @@ class _UserDetailSheetState extends ConsumerState<_UserDetailSheet> {
                     icon: const Icon(Icons.account_balance_wallet_outlined),
                     onPressed: _grantCredit,
                     expand: true),
+                const SizedBox(height: 8),
+                PkButton(
+                    label: 'Issue Strike',
+                    icon: const Icon(Icons.report_gmailerrorred_outlined),
+                    variant: PkButtonVariant.destructive,
+                    onPressed: () => _issueStrike(asInt(user['id'])),
+                    expand: true),
                 const SizedBox(height: 16),
                 _OrdersSection(title: 'Current Orders', orders: currentOrders),
                 const SizedBox(height: 12),
@@ -384,6 +432,58 @@ class _UserDetailSheetState extends ConsumerState<_UserDetailSheet> {
 
   void _refresh() {
     setState(() => _future = _load());
+  }
+
+  static String _fmtDate(String value) {
+    final parsed = DateTime.tryParse(value);
+    if (parsed == null) return value;
+    return DateFormat('MMM d, y').format(parsed.toLocal());
+  }
+
+  Future<void> _issueStrike(int userId) async {
+    final reasonController = TextEditingController();
+    final reason = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Issue Strike'),
+        content: TextField(
+          controller: reasonController,
+          minLines: 2,
+          maxLines: 4,
+          decoration: const InputDecoration(labelText: 'Reason'),
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppColors.pkmnRed),
+            onPressed: () {
+              final text = reasonController.text.trim();
+              if (text.isEmpty) return;
+              Navigator.of(context).pop(text);
+            },
+            child: const Text('Issue'),
+          ),
+        ],
+      ),
+    );
+    reasonController.dispose();
+    if (reason == null || !mounted) return;
+    try {
+      await ref
+          .read(adminRepositoryProvider)
+          .issueStrike(userId: userId, reason: reason);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Strike issued.')));
+      _refresh();
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('$error')));
+    }
   }
 
   Future<void> _grantCredit() async {

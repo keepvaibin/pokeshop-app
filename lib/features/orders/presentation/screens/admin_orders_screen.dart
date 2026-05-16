@@ -11,6 +11,13 @@ import '../../../../core/widgets/pk_input.dart';
 import '../../../../core/widgets/pk_status_badge.dart';
 import '../../data/orders_repository.dart';
 
+const _kCancellableStatuses = {
+  'pending',
+  'cash_needed',
+  'trade_review',
+  'pending_counteroffer',
+};
+
 class AdminOrdersScreen extends ConsumerStatefulWidget {
   const AdminOrdersScreen({super.key});
 
@@ -108,7 +115,8 @@ class _AdminOrdersScreenState extends ConsumerState<AdminOrdersScreen> {
                 else
                   ...filtered.map((order) => Padding(
                         padding: const EdgeInsets.only(bottom: 12),
-                        child: _AdminOrderCard(order: order),
+                        child: _AdminOrderCard(
+                            order: order, onCancel: () => _cancelOrder(order)),
                       )),
               ],
             ),
@@ -139,18 +147,50 @@ class _AdminOrdersScreenState extends ConsumerState<AdminOrdersScreen> {
     ].any((value) => value.toLowerCase().contains(query));
   }
 
-  static const _activeStatuses = {
-    'pending',
-    'cash_needed',
-    'trade_review',
-    'pending_counteroffer',
-  };
+  static const _activeStatuses = _kCancellableStatuses;
+
+  Future<void> _cancelOrder(OrderSummary order) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Cancel order?'),
+        content:
+            Text('Cancel order ${order.orderId}? This cannot be undone.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Back')),
+          FilledButton(
+            style: FilledButton.styleFrom(
+                backgroundColor: AppColors.pkmnRed),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Cancel Order'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    try {
+      await ref
+          .read(ordersRepositoryProvider)
+          .adminCancelOrder(orderId: order.orderId, reason: 'Cancelled by admin');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Order cancelled.')));
+      ref.invalidate(adminOrdersProvider);
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Failed: $error')));
+    }
+  }
 }
 
 class _AdminOrderCard extends StatelessWidget {
-  const _AdminOrderCard({required this.order});
+  const _AdminOrderCard({required this.order, required this.onCancel});
 
   final OrderSummary order;
+  final VoidCallback onCancel;
 
   @override
   Widget build(BuildContext context) {
@@ -163,6 +203,7 @@ class _AdminOrderCard extends StatelessWidget {
         : order.items
             .map((line) => '${line.title} x${line.quantity}')
             .join(', ');
+    final isCancellable = _kCancellableStatuses.contains(order.status);
     return InkWell(
       onTap: () => context.push('/admin/orders/${order.orderId}'),
       child: PkCard(
@@ -212,6 +253,19 @@ class _AdminOrderCard extends StatelessWidget {
                         : order.pickupLabel),
               ],
             ),
+            if (isCancellable) ...[
+              const SizedBox(height: 10),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton.icon(
+                  style: TextButton.styleFrom(
+                      foregroundColor: AppColors.pkmnRed),
+                  onPressed: onCancel,
+                  icon: const Icon(Icons.cancel_outlined, size: 16),
+                  label: const Text('Cancel Order'),
+                ),
+              ),
+            ],
           ],
         ),
       ),

@@ -215,6 +215,10 @@ class _TradeInCard extends StatelessWidget {
                   value:
                       '\$${asDouble(trade['final_payout_value']).toStringAsFixed(2)}'),
               _Chip(
+                  label: 'Type',
+                  value: asString(trade['payout_type'], fallback: 'store_credit')
+                      .replaceAll('_', ' ')),
+              _Chip(
                   label: 'Cards',
                   value:
                       '${items.fold<int>(0, (sum, item) => sum + asInt(item['quantity'], fallback: 1))}'),
@@ -469,6 +473,12 @@ class _CardReviewDialogState extends State<_CardReviewDialog> {
           const SizedBox(height: 4),
           Text(
               '${asString(item['set_name'])} • ${asString(item['condition'])} • qty ${asInt(item['quantity'], fallback: 1)}'),
+          if (asString(item['rarity']).isNotEmpty) ...[
+            const SizedBox(height: 2),
+            Text(asString(item['rarity']),
+                style: AppTextStyles.body(
+                    size: 11, color: AppColors.pkmnGrayDark)),
+          ],
           const SizedBox(height: 8),
           SegmentedButton<bool>(
             segments: const [

@@ -145,7 +145,7 @@ class _AdminMenuTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final enabled = item.ready && item.path != null;
     return InkWell(
-      onTap: enabled ? () => context.go(item.path!) : null,
+      onTap: enabled ? () => context.push(item.path!) : null,
       child: Opacity(
         opacity: enabled ? 1 : 0.62,
         child: PkCard(

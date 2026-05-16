@@ -147,6 +147,47 @@ class AdminRepository {
     }
   }
 
+  Future<Map<String, dynamic>> saveResourceMultipart({
+    required String collectionPath,
+    required Map<String, dynamic> fields,
+    required List<String> imagePaths,
+    Object? detailKey,
+  }) async {
+    try {
+      final path = detailKey == null
+          ? collectionPath
+          : _detailPath(collectionPath, detailKey);
+      final formData = FormData();
+      for (final entry in fields.entries) {
+        if (entry.value != null) {
+          formData.fields.add(MapEntry(entry.key, '${entry.value}'));
+        }
+      }
+      for (final imagePath in imagePaths) {
+        formData.files.add(
+          MapEntry('images', await MultipartFile.fromFile(imagePath)),
+        );
+      }
+      final response = detailKey == null
+          ? await _dio.post<dynamic>(path, data: formData)
+          : await _dio.patch<dynamic>(path, data: formData);
+      return asMap(response.data);
+    } on DioException catch (error) {
+      throw AppException.fromDio(error);
+    }
+  }
+
+  Future<void> reorderItemImages(String slug, List<int> imageIds) async {
+    try {
+      await _dio.post<dynamic>(
+        ApiEndpoints.itemReorderImages(slug),
+        data: {'order': imageIds},
+      );
+    } on DioException catch (error) {
+      throw AppException.fromDio(error);
+    }
+  }
+
   Future<void> deleteResource(String collectionPath, Object detailKey) async {
     try {
       await _dio.delete<dynamic>(_detailPath(collectionPath, detailKey));

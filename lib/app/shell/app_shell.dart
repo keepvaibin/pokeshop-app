@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
+import '../../core/widgets/pokemon_avatar.dart';
 import '../../features/auth/presentation/providers/auth_controller.dart';
 
 final adminClientPreviewProvider = StateProvider<bool>((ref) => false);
@@ -39,12 +40,19 @@ class AppShell extends ConsumerWidget {
                       context.go(value ? '/' : '/admin');
                     },
                   ),
-                  Expanded(child: child),
+                  Expanded(
+                    child: MediaQuery.removePadding(
+                      context: context,
+                      removeTop: true,
+                      child: child,
+                    ),
+                  ),
                 ],
               )
             : child;
         if (wide) {
           return Scaffold(
+            resizeToAvoidBottomInset: false,
             body: Row(
               children: [
                 NavigationRail(
@@ -67,6 +75,7 @@ class AppShell extends ConsumerWidget {
         }
 
         return Scaffold(
+          resizeToAvoidBottomInset: false,
           body: content,
           bottomNavigationBar: useAdminNav
               ? NavigationBar(
@@ -80,6 +89,7 @@ class AppShell extends ConsumerWidget {
               : _ClientBottomBar(
                   destinations: destinations,
                   selectedIndex: selectedIndex,
+                  pokemonIconFilename: auth.user?.pokemonIcon,
                   onSelected: (index) => context.go(destinations[index].path),
                 ),
         );
@@ -204,7 +214,7 @@ class _AdminPreviewSwitch extends StatelessWidget {
       child: SafeArea(
         bottom: false,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 3),
           child: Row(
             children: [
               Icon(
@@ -240,11 +250,13 @@ class _ClientBottomBar extends StatelessWidget {
     required this.destinations,
     required this.selectedIndex,
     required this.onSelected,
+    this.pokemonIconFilename,
   });
 
   final List<_ShellDestination> destinations;
   final int selectedIndex;
   final ValueChanged<int> onSelected;
+  final String? pokemonIconFilename;
 
   @override
   Widget build(BuildContext context) {
@@ -255,6 +267,8 @@ class _ClientBottomBar extends StatelessWidget {
       ),
       child: SafeArea(
         top: false,
+        left: false,
+        right: false,
         child: SizedBox(
           height: 72,
           child: Row(
@@ -266,6 +280,9 @@ class _ClientBottomBar extends StatelessWidget {
                     destination: destinations[index],
                     selected: selectedIndex == index,
                     elevated: index == 2,
+                    pokemonIconFilename: index == destinations.length - 1
+                        ? pokemonIconFilename
+                        : null,
                     onTap: () => onSelected(index),
                   ),
                 ),
@@ -283,18 +300,31 @@ class _ClientBottomBarItem extends StatelessWidget {
     required this.selected,
     required this.elevated,
     required this.onTap,
+    this.pokemonIconFilename,
   });
 
   final _ShellDestination destination;
   final bool selected;
   final bool elevated;
   final VoidCallback onTap;
+  final String? pokemonIconFilename;
 
   @override
   Widget build(BuildContext context) {
     final color = selected ? AppColors.pkmnBlue : AppColors.pkmnGrayDark;
     final icon = Icon(selected ? destination.selectedIcon : destination.icon,
         color: elevated ? Colors.white : color, size: elevated ? 28 : 22);
+
+    Widget iconWidget;
+    if (pokemonIconFilename != null) {
+      iconWidget = PokemonAvatar(
+        filename: pokemonIconFilename,
+        fallbackText: '',
+        size: 26,
+      );
+    } else {
+      iconWidget = icon;
+    }
 
     return Semantics(
       button: true,
@@ -322,10 +352,10 @@ class _ClientBottomBarItem extends StatelessWidget {
                     ),
                   ],
                 ),
-                child: Center(child: icon),
+                child: Center(child: iconWidget),
               )
             else ...[
-              icon,
+              iconWidget,
               const SizedBox(height: 4),
               Text(
                 destination.label,

@@ -64,6 +64,8 @@ abstract final class ApiEndpoints {
       '/trade-ins/admin/grant-credit/';
 
   static String itemBySlug(String slug) => '/inventory/items/$slug/';
+  static String itemReorderImages(String slug) =>
+      '/inventory/items/$slug/reorder-images/';
   static String categoryBySlug(String slug) => '/inventory/categories/$slug/';
   static String orderReceipt(String orderId) => '/orders/receipt/$orderId/';
   static String mergeCart(String orderId) => '/orders/$orderId/merge-cart/';

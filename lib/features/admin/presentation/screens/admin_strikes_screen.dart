@@ -125,12 +125,31 @@ class _AdminStrikesScreenState extends ConsumerState<AdminStrikesScreen> {
                             title: Text(asString(strike['reason'])),
                             subtitle: Text(
                                 'By ${asString(strike['given_by_email'], fallback: 'admin')} • ${asString(strike['created_at'])}'),
-                            trailing: IconButton(
-                              tooltip: 'Remove strike',
-                              icon: const Icon(Icons.delete_outline,
-                                  color: AppColors.pkmnRed),
-                              onPressed: () =>
-                                  _deleteStrike(asInt(strike['id'])),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Tooltip(
+                                  message: asBool(strike['acknowledged'])
+                                      ? 'Acknowledged'
+                                      : 'Not acknowledged',
+                                  child: Icon(
+                                    asBool(strike['acknowledged'])
+                                        ? Icons.check_circle_outline
+                                        : Icons.pending_outlined,
+                                    size: 20,
+                                    color: asBool(strike['acknowledged'])
+                                        ? AppColors.pkmnGrayDark
+                                        : AppColors.pkmnRed,
+                                  ),
+                                ),
+                                IconButton(
+                                  tooltip: 'Remove strike',
+                                  icon: const Icon(Icons.delete_outline,
+                                      color: AppColors.pkmnRed),
+                                  onPressed: () =>
+                                      _deleteStrike(asInt(strike['id'])),
+                                ),
+                              ],
                             ),
                           )),
                   ],

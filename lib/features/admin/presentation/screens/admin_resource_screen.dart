@@ -2,13 +2,16 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 
+import '../../../../core/models/api_models.dart';
 import '../../../../core/network/api_endpoints.dart';
 import '../../../../core/network/json_helpers.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/widgets/pk_button.dart';
 import '../../../../core/widgets/pk_card.dart';
+import '../../../../core/widgets/pk_network_image.dart';
 import '../../data/admin_repository.dart';
 
 enum AdminFieldType {
@@ -70,6 +73,11 @@ class AdminResourceConfig {
     this.canEdit = true,
     this.canDelete = true,
     this.usePut = false,
+    this.gridMode = false,
+    this.supportsImageUpload = false,
+    this.gridImageKey,
+    this.gridPriceKey,
+    this.gridStockKey,
   });
 
   final String title;
@@ -87,6 +95,12 @@ class AdminResourceConfig {
   final bool canEdit;
   final bool canDelete;
   final bool usePut;
+  // Grid view options
+  final bool gridMode;
+  final bool supportsImageUpload;
+  final String? gridImageKey;
+  final String? gridPriceKey;
+  final String? gridStockKey;
 
   String get writePath => savePath ?? listPath;
 
@@ -109,8 +123,14 @@ abstract final class AdminResourceConfigs {
     description: 'Storefront products, stock, prices, limits, release data.',
     listPath: ApiEndpoints.items,
     detailKey: 'slug',
+    searchParameter: 'q',
     titleKeys: ['title', 'name'],
     searchFields: ['title', 'description', 'tcg_set_name', 'rarity'],
+    gridMode: true,
+    supportsImageUpload: true,
+    gridImageKey: 'image_url',
+    gridPriceKey: 'price',
+    gridStockKey: 'stock',
     displayFields: [
       AdminDisplayField('price', 'Price', money: true),
       AdminDisplayField('stock', 'Stock'),
@@ -172,6 +192,11 @@ abstract final class AdminResourceConfigs {
           key: 'preview_before_release',
           label: 'Preview Before Release',
           type: AdminFieldType.boolean),
+      AdminFormFieldConfig(
+          key: 'published_at',
+          label: 'Publish Date',
+          type: AdminFieldType.dateTime,
+          helperText: 'Leave blank to publish immediately when saving'),
     ],
   );
 
@@ -538,6 +563,61 @@ class _AdminResourceListState extends ConsumerState<AdminResourceList> {
     }
 
     final visible = _visibleItems();
+    if (config.gridMode) {
+      return RefreshIndicator(
+        onRefresh: _load,
+        child: CustomScrollView(
+          slivers: [
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: _SearchPanel(
+                        controller: _searchController,
+                        onChanged: _onSearchChanged,
+                        onSubmitted: _onSearchSubmitted,
+                        onRefresh: _load,
+                      ),
+                    ),
+                    if (config.canCreate) ...[
+                      const SizedBox(width: 8),
+                      IconButton.filled(
+                        tooltip: 'Create',
+                        onPressed: _openCreate,
+                        icon: const Icon(Icons.add),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              sliver: SliverGrid.builder(
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  crossAxisSpacing: 12,
+                  mainAxisSpacing: 12,
+                  childAspectRatio: 0.68,
+                ),
+                itemCount: visible.length,
+                itemBuilder: (context, index) {
+                  final item = visible[index];
+                  return _GridResourceCard(
+                    config: config,
+                    item: item,
+                    onEdit: config.canEdit ? () => _openEdit(item) : null,
+                    onDelete: config.canDelete ? () => _delete(item) : null,
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      );
+    }
     return RefreshIndicator(
       onRefresh: _load,
       child: ListView.separated(
@@ -815,6 +895,145 @@ class _ResourceCard extends StatelessWidget {
   }
 }
 
+class _GridResourceCard extends StatelessWidget {
+  const _GridResourceCard({
+    required this.config,
+    required this.item,
+    this.onEdit,
+    this.onDelete,
+  });
+
+  final AdminResourceConfig config;
+  final Map<String, dynamic> item;
+  final VoidCallback? onEdit;
+  final VoidCallback? onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    final title = config.titleFor(item);
+    final rawImage = asString(
+      item[config.gridImageKey ?? 'image_url'],
+      fallback: asString(item['image_path']),
+    );
+    final imageUrl = absoluteMediaUrl(rawImage.isEmpty ? null : rawImage);
+    final price = config.gridPriceKey != null
+        ? asDouble(item[config.gridPriceKey!])
+        : null;
+    final stock = config.gridStockKey != null
+        ? asInt(item[config.gridStockKey!])
+        : null;
+    final isActive = item.containsKey('is_active')
+        ? asBool(item['is_active'], fallback: true)
+        : true;
+    final inStock = stock == null || stock > 0;
+
+    return GestureDetector(
+      onTap: onEdit,
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.pkmnBorder),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              child: Stack(
+                children: [
+                  Positioned.fill(
+                    child: PkNetworkImage(
+                      imageUrl: imageUrl,
+                      semanticLabel: title,
+                      fit: BoxFit.contain,
+                      padding: const EdgeInsets.all(8),
+                      backgroundColor: AppColors.pkmnGrayLight,
+                    ),
+                  ),
+                  if (!isActive || !inStock)
+                    Positioned(
+                      top: 6,
+                      left: 6,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: inStock
+                              ? AppColors.pkmnRed.withValues(alpha: 0.85)
+                              : AppColors.pkmnGrayDark.withValues(alpha: 0.85),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          inStock ? 'Inactive' : 'OOS',
+                          style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyles.body(size: 12),
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      if (price != null)
+                        Text(
+                          '\$${price.toStringAsFixed(2)}',
+                          style: AppTextStyles.heading(
+                              size: 13, color: AppColors.pkmnBlue),
+                        ),
+                      const Spacer(),
+                      if (stock != null)
+                        Text(
+                          'x$stock',
+                          style: AppTextStyles.label(
+                              color: inStock
+                                  ? AppColors.pkmnGrayDark
+                                  : AppColors.pkmnRed),
+                        ),
+                    ],
+                  ),
+                  if (onDelete != null) ...[
+                    const SizedBox(height: 4),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        InkWell(
+                          onTap: onDelete,
+                          borderRadius: BorderRadius.circular(4),
+                          child: const Padding(
+                            padding: EdgeInsets.all(4),
+                            child: Icon(Icons.delete_outline,
+                                size: 16, color: AppColors.pkmnRed),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _MetaPill extends StatelessWidget {
   const _MetaPill({required this.label, required this.value});
 
@@ -886,6 +1105,13 @@ class _AdminResourceEditorState extends ConsumerState<AdminResourceEditor> {
   final Map<String, bool> _boolValues = {};
   bool _saving = false;
 
+  // Image management (only for configs with supportsImageUpload)
+  final _imagePicker = ImagePicker();
+  List<Map<String, dynamic>> _existingImages = [];
+  List<int> _originalImageOrder = [];
+  List<int> _currentImageOrder = [];
+  List<XFile> _pendingImages = [];
+
   bool get editing => widget.item != null;
 
   @override
@@ -900,6 +1126,12 @@ class _AdminResourceEditorState extends ConsumerState<AdminResourceEditor> {
         _controllers[field.key] =
             TextEditingController(text: _editorValue(source));
       }
+    }
+    if (widget.config.supportsImageUpload && widget.item != null) {
+      _existingImages = asMapList(widget.item!['images']);
+      _originalImageOrder =
+          _existingImages.map((img) => asInt(img['id'])).toList();
+      _currentImageOrder = List.from(_originalImageOrder);
     }
   }
 
@@ -933,6 +1165,10 @@ class _AdminResourceEditorState extends ConsumerState<AdminResourceEditor> {
                 const SizedBox(height: 14),
                 for (final field in widget.config.formFields) ...[
                   _buildField(field),
+                  const SizedBox(height: 12),
+                ],
+                if (widget.config.supportsImageUpload) ...[
+                  _buildImagesSection(),
                   const SizedBox(height: 12),
                 ],
                 PkButton(
@@ -977,6 +1213,36 @@ class _AdminResourceEditorState extends ConsumerState<AdminResourceEditor> {
       );
     }
 
+    if (field.type == AdminFieldType.dateTime) {
+      final controller = _controllers[field.key]!;
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Expanded(
+            child: TextFormField(
+              controller: controller,
+              readOnly: true,
+              decoration: InputDecoration(
+                labelText: field.label,
+                helperText: field.helperText,
+                suffixIcon: IconButton(
+                  tooltip: 'Pick date',
+                  icon: const Icon(Icons.calendar_today_outlined),
+                  onPressed: () => _pickDate(controller),
+                ),
+              ),
+            ),
+          ),
+          if (controller.text.isNotEmpty)
+            IconButton(
+              tooltip: 'Clear date',
+              icon: const Icon(Icons.clear),
+              onPressed: () => setState(() => controller.clear()),
+            ),
+        ],
+      );
+    }
+
     final readOnly = editing && field.readOnlyWhenEditing;
     return TextFormField(
       controller: _controllers[field.key],
@@ -1003,6 +1269,157 @@ class _AdminResourceEditorState extends ConsumerState<AdminResourceEditor> {
     );
   }
 
+  Future<void> _pickDate(TextEditingController controller) async {
+    final now = DateTime.now();
+    DateTime? initial;
+    if (controller.text.isNotEmpty) {
+      initial = DateTime.tryParse(controller.text);
+    }
+    final date = await showDatePicker(
+      context: context,
+      initialDate: initial ?? now,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2035),
+    );
+    if (date == null || !mounted) return;
+    setState(() {
+      controller.text = date.toIso8601String().substring(0, 10);
+    });
+  }
+
+  Widget _buildImagesSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Images', style: AppTextStyles.heading(size: 16)),
+        const SizedBox(height: 8),
+        if (_existingImages.isNotEmpty && _pendingImages.isEmpty) ...[
+          Text(
+            'Drag to reorder (${_existingImages.length} image${_existingImages.length == 1 ? '' : 's'})',
+            style: AppTextStyles.label(color: AppColors.pkmnGrayDark),
+          ),
+          const SizedBox(height: 6),
+          ReorderableListView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: _existingImages.length,
+            onReorder: (oldIndex, newIndex) {
+              setState(() {
+                if (newIndex > oldIndex) newIndex--;
+                final img = _existingImages.removeAt(oldIndex);
+                _existingImages.insert(newIndex, img);
+                final id = _currentImageOrder.removeAt(oldIndex);
+                _currentImageOrder.insert(newIndex, id);
+              });
+            },
+            itemBuilder: (context, index) {
+              final img = _existingImages[index];
+              final url = absoluteMediaUrl(asString(img['url'],
+                  fallback: asString(img['image_url'])));
+              return ListTile(
+                key: ValueKey(img['id']),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 0, vertical: 2),
+                leading: SizedBox(
+                  width: 52,
+                  height: 52,
+                  child: PkNetworkImage(
+                    imageUrl: url,
+                    semanticLabel: 'Image ${index + 1}',
+                    padding: const EdgeInsets.all(2),
+                  ),
+                ),
+                title: Text('Image ${index + 1}',
+                    style: AppTextStyles.body(size: 13)),
+                trailing: ReorderableDragStartListener(
+                  index: index,
+                  child: const Icon(Icons.drag_handle),
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: 8),
+        ],
+        if (_pendingImages.isNotEmpty) ...[
+          Text(
+            'New images (will replace existing)',
+            style: AppTextStyles.label(color: AppColors.pkmnGrayDark),
+          ),
+          const SizedBox(height: 6),
+          SizedBox(
+            height: 72,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: _pendingImages.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 6),
+              itemBuilder: (context, index) {
+                return Stack(
+                  children: [
+                    Container(
+                      width: 64,
+                      height: 64,
+                      decoration: BoxDecoration(
+                        color: AppColors.pkmnGrayLight,
+                        border: Border.all(color: AppColors.pkmnBorder),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: const Icon(Icons.image_outlined,
+                          size: 28, color: AppColors.pkmnGrayDark),
+                    ),
+                    Positioned(
+                      top: 0,
+                      right: 0,
+                      child: GestureDetector(
+                        onTap: () =>
+                            setState(() => _pendingImages.removeAt(index)),
+                        child: Container(
+                          width: 20,
+                          height: 20,
+                          decoration: const BoxDecoration(
+                            color: AppColors.pkmnRed,
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.close,
+                              size: 12, color: Colors.white),
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Note: saving will upload these and replace any existing images.',
+            style: AppTextStyles.label(color: AppColors.pkmnYellowDark)
+                .copyWith(fontSize: 11),
+          ),
+          const SizedBox(height: 8),
+        ],
+        OutlinedButton.icon(
+          onPressed: _pickImages,
+          icon: const Icon(Icons.add_photo_alternate_outlined),
+          label: Text(_pendingImages.isEmpty ? 'Add Images' : 'Replace Selection'),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _pickImages() async {
+    final picked = await _imagePicker.pickMultiImage(imageQuality: 85);
+    if (picked.isEmpty || !mounted) return;
+    setState(() => _pendingImages = picked);
+  }
+
+  bool _hasReordered() {
+    if (_originalImageOrder.length != _currentImageOrder.length) return false;
+    for (int i = 0; i < _originalImageOrder.length; i++) {
+      if (_originalImageOrder[i] != _currentImageOrder[i]) return true;
+    }
+    return false;
+  }
+
   Future<void> _save() async {
     if (_formKey.currentState?.validate() != true) return;
     setState(() => _saving = true);
@@ -1025,12 +1442,41 @@ class _AdminResourceEditorState extends ConsumerState<AdminResourceEditor> {
           _ => field.uppercase ? raw.toUpperCase() : raw,
         };
       }
-      await ref.read(adminRepositoryProvider).saveResource(
-            collectionPath: widget.config.writePath,
-            detailKey: editing ? widget.config.detailValue(widget.item!) : null,
-            payload: payload,
-            usePut: widget.config.usePut,
-          );
+
+      final repo = ref.read(adminRepositoryProvider);
+      final detailKey =
+          editing ? widget.config.detailValue(widget.item!) : null;
+
+      if (_pendingImages.isNotEmpty) {
+        // Upload via multipart — sends fields + images in one request
+        final stringFields = <String, dynamic>{};
+        for (final entry in payload.entries) {
+          if (entry.value != null) {
+            stringFields[entry.key] = '${entry.value}';
+          }
+        }
+        await repo.saveResourceMultipart(
+          collectionPath: widget.config.writePath,
+          fields: stringFields,
+          imagePaths: _pendingImages.map((f) => f.path).toList(),
+          detailKey: detailKey,
+        );
+      } else {
+        await repo.saveResource(
+          collectionPath: widget.config.writePath,
+          detailKey: detailKey,
+          payload: payload,
+          usePut: widget.config.usePut,
+        );
+        // Reorder images if they were moved (only when no new upload)
+        if (editing && _hasReordered() && _currentImageOrder.isNotEmpty) {
+          final slug = asString(widget.item!['slug']);
+          if (slug.isNotEmpty) {
+            await repo.reorderItemImages(slug, _currentImageOrder);
+          }
+        }
+      }
+
       if (!mounted) return;
       Navigator.of(context).pop(true);
     } catch (error) {
