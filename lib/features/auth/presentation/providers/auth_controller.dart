@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/error/app_exception.dart';
 import '../../../../core/network/network_providers.dart';
+import '../../../notifications/data/push_notification_service.dart';
 import '../../data/auth_repository.dart';
 import '../../domain/entities/app_user.dart';
 
@@ -48,24 +49,32 @@ final authRepositoryProvider = Provider<AuthRepository>((ref) {
 
 final authControllerProvider =
     StateNotifierProvider<AuthController, AuthState>((ref) {
-  return AuthController(ref.watch(authRepositoryProvider));
+  return AuthController(
+    ref.watch(authRepositoryProvider),
+    ref.watch(pushNotificationServiceProvider),
+  );
 });
 
 final pokemonIconsProvider = FutureProvider<List<PokemonIconOption>>(
     (ref) => ref.watch(authRepositoryProvider).pokemonIcons());
 
 class AuthController extends StateNotifier<AuthState> {
-  AuthController(this._repository) : super(const AuthState.checking()) {
+  AuthController(this._repository, this._pushNotifications)
+      : super(const AuthState.checking()) {
     unawaited(restore());
   }
 
   final AuthRepository _repository;
+  final PushNotificationService _pushNotifications;
 
   Future<void> restore() async {
     final user = await _repository.restoreSession();
     state = user == null
         ? const AuthState(status: AuthStatus.unauthenticated)
         : AuthState(status: AuthStatus.authenticated, user: user);
+    if (user != null) {
+      unawaited(_pushNotifications.registerDeviceIfAllowed());
+    }
   }
 
   Future<void> loginWithEmail(
@@ -111,6 +120,7 @@ class AuthController extends StateNotifier<AuthState> {
   }
 
   Future<void> logout() async {
+    await _pushNotifications.unregisterCurrentDevice();
     await _repository.logout();
     state = const AuthState(status: AuthStatus.unauthenticated);
   }
@@ -124,6 +134,7 @@ class AuthController extends StateNotifier<AuthState> {
     try {
       final user = await action();
       state = AuthState(status: AuthStatus.authenticated, user: user);
+      unawaited(_pushNotifications.registerDeviceIfAllowed());
     } on AppException catch (error) {
       state = AuthState(
           status: AuthStatus.unauthenticated, errorMessage: error.message);

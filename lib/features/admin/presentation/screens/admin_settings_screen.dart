@@ -136,23 +136,28 @@ class _AdminSettingsScreenState extends ConsumerState<AdminSettingsScreen> {
 
   Widget _buildStoreConfig(StoreSettings settings) {
     return PkCard(
+      padding: const EdgeInsets.all(22),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text('Store Config', style: AppTextStyles.heading(size: 20)),
-          const SizedBox(height: 16),
+          const SizedBox(height: 22),
           PkInput(
             controller: _announcementController,
             label: 'Store Announcement',
             maxLines: 3,
           ),
-          const SizedBox(height: 14),
-          PkInput(
+          const SizedBox(height: 20),
+          _PickerInput(
             controller: _announcementExpiresAtController,
-            label: 'Announcement Expires At (ISO date)',
-            hint: '2026-06-01T00:00:00Z',
+            label: 'Announcement Expires At',
+            hint: 'Pick a date and time',
+            onTap: () => _pickDateTime(_announcementExpiresAtController),
+            onClear: _announcementExpiresAtController.text.isEmpty
+                ? null
+                : () => setState(_announcementExpiresAtController.clear),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 20),
           _NumberRow(
             first: PkInput(
               controller: _tradeCreditController,
@@ -165,37 +170,37 @@ class _AdminSettingsScreenState extends ConsumerState<AdminSettingsScreen> {
               keyboardType: TextInputType.number,
             ),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 20),
           PkInput(
             controller: _maxTradeCardsController,
             label: 'Max Trade Cards / Order',
             keyboardType: TextInputType.number,
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 20),
           PkInput(controller: _webhookController, label: 'Discord Webhook URL'),
-          const SizedBox(height: 14),
+          const SizedBox(height: 20),
           PkInput(
               controller: _ucscInviteController, label: 'UCSC Discord Invite'),
-          const SizedBox(height: 14),
+          const SizedBox(height: 20),
           PkInput(
               controller: _publicInviteController,
               label: 'Public Discord Invite'),
-          const SizedBox(height: 4),
+          const SizedBox(height: 12),
           SwitchListTile.adaptive(
             contentPadding: EdgeInsets.zero,
             value: _footerNewsletter,
             onChanged: (value) => setState(() => _footerNewsletter = value),
             title: const Text('Show footer newsletter'),
           ),
-          const Divider(height: 24),
+          const Divider(height: 34),
           Text('Standard Format Regulation Marks',
               style: AppTextStyles.heading(size: 16)),
-          const SizedBox(height: 4),
+          const SizedBox(height: 8),
           Text(
             'Mark each regulation letter as Legal, Illegal, or leave unset (neutral).',
             style: AppTextStyles.body(size: 12, color: AppColors.pkmnGrayDark),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 16),
           ..._regulationMarkOptions.map((mark) {
             final isLegal = _standardLegalMarks.contains(mark);
             final isIllegal = _standardIllegalMarks.contains(mark);
@@ -205,7 +210,7 @@ class _AdminSettingsScreenState extends ConsumerState<AdminSettingsScreen> {
                     ? 'illegal'
                     : 'neutral';
             return Padding(
-              padding: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.only(bottom: 12),
               child: Row(
                 children: [
                   SizedBox(
@@ -214,7 +219,7 @@ class _AdminSettingsScreenState extends ConsumerState<AdminSettingsScreen> {
                         style: AppTextStyles.heading(size: 15),
                         textAlign: TextAlign.center),
                   ),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 12),
                   Expanded(
                     child: SegmentedButton<String>(
                       segments: const [
@@ -251,7 +256,7 @@ class _AdminSettingsScreenState extends ConsumerState<AdminSettingsScreen> {
               ),
             );
           }),
-          const SizedBox(height: 8),
+          const SizedBox(height: 14),
           PkButton(
             label: 'Save Store Config',
             loading: _savingStore,
@@ -265,11 +270,12 @@ class _AdminSettingsScreenState extends ConsumerState<AdminSettingsScreen> {
 
   Widget _buildControls() {
     return PkCard(
+      padding: const EdgeInsets.all(22),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text('Enable / Disable', style: AppTextStyles.heading(size: 20)),
-          const SizedBox(height: 8),
+          const SizedBox(height: 14),
           _SwitchLine(
             title: 'Out of office',
             subtitle: 'Shows the shop as temporarily away.',
@@ -277,12 +283,17 @@ class _AdminSettingsScreenState extends ConsumerState<AdminSettingsScreen> {
             onChanged: (value) => setState(() => _isOoo = value),
           ),
           if (_isOoo) ...[
-            const SizedBox(height: 8),
-            PkInput(
+            const SizedBox(height: 14),
+            _PickerInput(
               controller: _oooUntilController,
-              label: 'OOO Until (ISO date/time)',
-              hint: '2026-05-20T21:00:00Z',
+              label: 'OOO Until',
+              hint: 'Pick a date',
+              onTap: () => _pickDate(_oooUntilController),
+              onClear: _oooUntilController.text.isEmpty
+                  ? null
+                  : () => setState(_oooUntilController.clear),
             ),
+            const SizedBox(height: 8),
           ],
           _SwitchLine(
             title: 'Disable new orders',
@@ -296,8 +307,9 @@ class _AdminSettingsScreenState extends ConsumerState<AdminSettingsScreen> {
             value: _tradeInsEnabled,
             onChanged: (value) => setState(() => _tradeInsEnabled = value),
           ),
-          const Divider(height: 22),
+          const Divider(height: 32),
           Text('Payment Methods', style: AppTextStyles.heading(size: 16)),
+          const SizedBox(height: 6),
           _SwitchLine(
               title: 'Venmo',
               value: _payVenmo,
@@ -318,7 +330,7 @@ class _AdminSettingsScreenState extends ConsumerState<AdminSettingsScreen> {
               title: 'Trade',
               value: _payTrade,
               onChanged: (value) => setState(() => _payTrade = value)),
-          const SizedBox(height: 8),
+          const SizedBox(height: 14),
           PkButton(
             label: 'Save Controls',
             loading: _savingControls,
@@ -492,6 +504,81 @@ class _AdminSettingsScreenState extends ConsumerState<AdminSettingsScreen> {
     );
   }
 
+  Future<void> _pickDateTime(TextEditingController controller) async {
+    final now = DateTime.now();
+    final firstDate = DateTime(now.year - 1);
+    final lastDate = DateTime(now.year + 5);
+    final parsed = DateTime.tryParse(controller.text);
+    final initial = _clampDate(parsed ?? now.add(const Duration(days: 7)),
+        firstDate: firstDate, lastDate: lastDate);
+    final date = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: firstDate,
+      lastDate: lastDate,
+    );
+    if (!mounted || date == null) return;
+    final time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(initial),
+    );
+    if (!mounted || time == null) return;
+    final selected = DateTime(
+      date.year,
+      date.month,
+      date.day,
+      time.hour,
+      time.minute,
+    );
+    setState(() => controller.text = _formatDateTime(selected));
+  }
+
+  Future<void> _pickDate(TextEditingController controller) async {
+    final now = DateTime.now();
+    final firstDate = DateTime(now.year - 1);
+    final lastDate = DateTime(now.year + 5);
+    final parsed = DateTime.tryParse(controller.text);
+    final initial = _clampDate(parsed ?? now.add(const Duration(days: 1)),
+        firstDate: firstDate, lastDate: lastDate);
+    final date = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: firstDate,
+      lastDate: lastDate,
+    );
+    if (!mounted || date == null) return;
+    setState(() => controller.text = _formatDate(date));
+  }
+
+  String _formatExistingDateTime(String? value) {
+    final parsed = DateTime.tryParse(value ?? '');
+    if (parsed == null) return value ?? '';
+    return _formatDateTime(parsed.toLocal());
+  }
+
+  String _formatExistingDate(String? value) {
+    final parsed = DateTime.tryParse(value ?? '');
+    if (parsed == null) return value ?? '';
+    return _formatDate(parsed.toLocal());
+  }
+
+  String _formatDateTime(DateTime value) {
+    final date = _formatDate(value);
+    return '${date}T${_twoDigits(value.hour)}:${_twoDigits(value.minute)}:00';
+  }
+
+  String _formatDate(DateTime value) =>
+      '${value.year}-${_twoDigits(value.month)}-${_twoDigits(value.day)}';
+
+  String _twoDigits(int value) => value.toString().padLeft(2, '0');
+
+  DateTime _clampDate(DateTime value,
+      {required DateTime firstDate, required DateTime lastDate}) {
+    if (value.isBefore(firstDate)) return firstDate;
+    if (value.isAfter(lastDate)) return lastDate;
+    return value;
+  }
+
   void _syncSettings(StoreSettings settings) {
     final key = Object.hashAll([
       settings.storeAnnouncement,
@@ -518,7 +605,8 @@ class _AdminSettingsScreenState extends ConsumerState<AdminSettingsScreen> {
     if (_syncedSettingsKey == key) return;
     _syncedSettingsKey = key;
     _announcementController.text = settings.storeAnnouncement;
-    _announcementExpiresAtController.text = settings.announcementExpiresAt ?? '';
+    _announcementExpiresAtController.text =
+      _formatExistingDateTime(settings.announcementExpiresAt);
     _tradeCreditController.text =
         settings.tradeCreditPercentage.toStringAsFixed(0);
     _tradeCashController.text = settings.tradeCashPercentage.toStringAsFixed(0);
@@ -526,7 +614,7 @@ class _AdminSettingsScreenState extends ConsumerState<AdminSettingsScreen> {
     _webhookController.text = settings.discordWebhookUrl;
     _ucscInviteController.text = settings.ucscDiscordInvite ?? '';
     _publicInviteController.text = settings.publicDiscordInvite ?? '';
-    _oooUntilController.text = settings.oooUntil ?? '';
+    _oooUntilController.text = _formatExistingDate(settings.oooUntil);
     _footerNewsletter = settings.showFooterNewsletter;
     _isOoo = settings.isOoo;
     _ordersDisabled = settings.ordersDisabled;
@@ -803,6 +891,40 @@ class _SwitchLine extends StatelessWidget {
   }
 }
 
+class _PickerInput extends StatelessWidget {
+  const _PickerInput({
+    required this.controller,
+    required this.label,
+    required this.onTap,
+    this.hint,
+    this.onClear,
+  });
+
+  final TextEditingController controller;
+  final String label;
+  final String? hint;
+  final VoidCallback onTap;
+  final VoidCallback? onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    return PkInput(
+      controller: controller,
+      label: label,
+      hint: hint,
+      readOnly: true,
+      onTap: onTap,
+      suffixIcon: onClear == null
+          ? const Icon(Icons.calendar_month_outlined)
+          : IconButton(
+              tooltip: 'Clear',
+              onPressed: onClear,
+              icon: const Icon(Icons.close),
+            ),
+    );
+  }
+}
+
 class _NumberRow extends StatelessWidget {
   const _NumberRow({required this.first, required this.second});
 
@@ -814,11 +936,11 @@ class _NumberRow extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         if (constraints.maxWidth < 520) {
-          return Column(children: [first, const SizedBox(height: 10), second]);
+          return Column(children: [first, const SizedBox(height: 16), second]);
         }
         return Row(children: [
           Expanded(child: first),
-          const SizedBox(width: 10),
+          const SizedBox(width: 16),
           Expanded(child: second)
         ]);
       },

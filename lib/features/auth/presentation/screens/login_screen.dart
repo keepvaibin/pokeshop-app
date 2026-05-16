@@ -8,6 +8,7 @@ import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/widgets/pk_button.dart';
 import '../../../../core/widgets/pk_card.dart';
 import '../../../../core/widgets/pk_input.dart';
+import '../../../notifications/data/push_notification_service.dart';
 import '../providers/auth_controller.dart';
 
 enum _LoginMode { google, email }
@@ -23,6 +24,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   _LoginMode _mode = _LoginMode.google;
+  PushPermissionResult? _notificationResult;
+  bool _notificationBusy = false;
 
   @override
   void dispose() {
@@ -62,6 +65,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           'Access your campus pickup account',
                           textAlign: TextAlign.center,
                           style: AppTextStyles.body(color: AppColors.pkmnGray),
+                        ),
+                        const SizedBox(height: 18),
+                        _NotificationPermissionCard(
+                          busy: _notificationBusy,
+                          result: _notificationResult,
+                          onPressed: _requestNotificationPermission,
                         ),
                         const SizedBox(height: 22),
                         _AuthTabs(
@@ -112,6 +121,95 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               ),
             ),
           ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _requestNotificationPermission() async {
+    setState(() => _notificationBusy = true);
+    final result =
+        await ref.read(pushNotificationServiceProvider).requestPermission();
+    if (!mounted) return;
+    setState(() {
+      _notificationBusy = false;
+      _notificationResult = result;
+    });
+  }
+}
+
+class _NotificationPermissionCard extends StatelessWidget {
+  const _NotificationPermissionCard({
+    required this.busy,
+    required this.onPressed,
+    this.result,
+  });
+
+  final bool busy;
+  final PushPermissionResult? result;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final granted = result?.canRegister ?? false;
+    final denied = result?.state == PushPermissionState.denied;
+    final color = granted
+      ? Colors.green.shade700
+      : denied
+            ? AppColors.pkmnRed
+            : AppColors.pkmnBlue;
+    final message = result?.message.isNotEmpty == true
+        ? result!.message
+        : 'Get order updates, counteroffers, pickup changes, and completed or cancelled alerts.';
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
+        borderRadius: AppDecorations.controlRadius,
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  granted
+                      ? Icons.notifications_active_outlined
+                      : Icons.notifications_none_outlined,
+                  color: color,
+                  size: 22,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Order update alerts',
+                          style: AppTextStyles.label(color: color)),
+                      const SizedBox(height: 4),
+                      Text(message,
+                          style: AppTextStyles.body(
+                              size: 12, color: AppColors.pkmnGrayDark)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            if (!granted) ...[
+              const SizedBox(height: 12),
+              PkButton(
+                label: busy ? 'Checking...' : 'Enable Notifications',
+                icon: const Icon(Icons.notifications_active_outlined),
+                loading: busy,
+                onPressed: busy ? null : onPressed,
+                expand: true,
+              ),
+            ],
+          ],
         ),
       ),
     );

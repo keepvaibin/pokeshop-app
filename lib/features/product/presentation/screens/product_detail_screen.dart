@@ -45,8 +45,7 @@ class ProductDetailScreen extends ConsumerWidget {
                             child: PkNetworkImage(
                               imageUrl: item.imageUrl,
                               semanticLabel: item.title,
-                              padding:
-                                  const EdgeInsets.fromLTRB(18, 24, 18, 18),
+                              padding: const EdgeInsets.all(20),
                             ),
                           ),
                           Padding(

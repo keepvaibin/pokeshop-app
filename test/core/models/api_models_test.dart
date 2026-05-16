@@ -21,6 +21,36 @@ void main() {
       expect(item.stockQuantity, 3);
       expect(item.category, 'cards');
     });
+
+    test('prefers uploaded item images over blank or remote image paths', () {
+      final item = ProductItem.fromJson({
+        'id': 8,
+        'slug': 'mega-battle-deck',
+        'title': 'Mega Battle Deck',
+        'price': '39.99',
+        'image_path': 'https://images.example.com/old-art.png',
+        'images': [
+          {'url': '/media/inventory_images/mega-battle.png'}
+        ],
+      });
+
+      expect(item.imageUrl,
+          'https://api.santacruztcg.com/media/inventory_images/mega-battle.png');
+    });
+  });
+
+  group('OrderLine', () {
+    test('falls back when backend image path is blank', () {
+      final line = OrderLine.fromJson({
+        'item_title': 'Perfect Order ETB',
+        'quantity': 1,
+        'price_at_purchase': '59.99',
+        'image_path': '',
+        'image_url': 'https://images.example.com/perfect-order.png',
+      });
+
+      expect(line.imageUrl, 'https://images.example.com/perfect-order.png');
+    });
   });
 
   group('checkout models', () {

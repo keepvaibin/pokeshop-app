@@ -16,6 +16,7 @@ abstract final class ApiEndpoints {
   static const String discordInitiate = '/auth/discord/initiate/';
   static const String pokemonIcons = '/auth/pokemon-icons/';
   static const String myStrikes = '/auth/my-strikes/';
+    static const String pushDevices = '/auth/push-devices/';
 
   static const String items = '/inventory/items/';
   static const String itemFacets = '/inventory/items/facets/';

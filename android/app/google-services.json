@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "287486113538",
+    "project_id": "pokeshop-46157",
+    "storage_bucket": "pokeshop-46157.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:287486113538:android:a7e244331c8649eeb2b41b",
+        "android_client_info": {
+          "package_name": "com.santacruztcg.pokeshop_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDD1nVKzwCG9Jkhi5CCmrMiAGY1bey-g84"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -15,6 +15,29 @@ String? absoluteMediaUrl(String? value) {
   return '$origin${trimmed.startsWith('/') ? trimmed : '/$trimmed'}';
 }
 
+String? _firstNonBlankString(Iterable<Object?> values) {
+  for (final value in values) {
+    final text = value?.toString().trim();
+    if (text != null && text.isNotEmpty) {
+      return text;
+    }
+  }
+  return null;
+}
+
+String? _firstImageUrl(List<Map<String, dynamic>> images) {
+  if (images.isEmpty) {
+    return null;
+  }
+  final first = images.first;
+  return _firstNonBlankString(
+      [first['url'], first['image'], first['image_url']]);
+}
+
+String? _absoluteFirstMediaUrl(Iterable<Object?> values) {
+  return absoluteMediaUrl(_firstNonBlankString(values));
+}
+
 class ProductItem {
   const ProductItem({
     required this.id,
@@ -54,11 +77,7 @@ class ProductItem {
 
   factory ProductItem.fromJson(Map<String, dynamic> json) {
     final images = asMapList(json['images']);
-    final firstImage = images.isEmpty
-        ? null
-        : images.first['image'] ??
-            images.first['image_url'] ??
-            images.first['url'];
+    final firstImage = _firstImageUrl(images);
     return ProductItem(
       id: asInt(json['id']),
       slug: asString(json['slug'], fallback: asInt(json['id']).toString()),
@@ -66,9 +85,8 @@ class ProductItem {
           fallback: asString(json['name'], fallback: 'Untitled Item')),
       price: asDouble(json['price']),
       description: asString(json['description']),
-      imageUrl: absoluteMediaUrl(asString(json['image_url'],
-          fallback: asString(json['image_path'],
-              fallback: firstImage?.toString() ?? ''))),
+      imageUrl: _absoluteFirstMediaUrl(
+          [firstImage, json['image_url'], json['image_path']]),
       stockQuantity: asInt(json['stock'],
           fallback:
               asInt(json['stock_quantity'], fallback: asInt(json['quantity']))),
@@ -346,6 +364,7 @@ class OrderLine {
   double get subtotal => price * quantity;
 
   factory OrderLine.fromJson(Map<String, dynamic> json) {
+    final images = asMapList(json['images']);
     return OrderLine(
       id: json['id'] == null ? null : asInt(json['id']),
       title: asString(json['item_title'], fallback: asString(json['title'])),
@@ -353,8 +372,8 @@ class OrderLine {
       price: asDouble(json['price_at_purchase'],
           fallback: asDouble(json['item_price'])),
       orderItemIds: _asIntList(json['order_item_ids']),
-      imageUrl: absoluteMediaUrl(
-          asString(json['image_path'], fallback: asString(json['image_url']))),
+      imageUrl: _absoluteFirstMediaUrl(
+          [_firstImageUrl(images), json['image_path'], json['image_url']]),
     );
   }
 

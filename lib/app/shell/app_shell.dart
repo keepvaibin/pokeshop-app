@@ -267,8 +267,7 @@ class _ClientBottomBar extends StatelessWidget {
       ),
       child: SafeArea(
         top: false,
-        left: false,
-        right: false,
+        minimum: const EdgeInsets.symmetric(horizontal: 12),
         child: SizedBox(
           height: 72,
           child: Row(

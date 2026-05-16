@@ -35,7 +35,7 @@ class ProductCard extends ConsumerWidget {
                 child: PkNetworkImage(
                   imageUrl: item.imageUrl,
                   semanticLabel: item.title,
-                  padding: const EdgeInsets.fromLTRB(14, 18, 14, 10),
+                  padding: const EdgeInsets.all(14),
                 ),
               ),
               Padding(
