@@ -5,6 +5,7 @@
 .idea/
 keys/
 android/key.properties
+android/*firebase-adminsdk*.json
 build/
 coverage/
 ios/Flutter/ephemeral/
