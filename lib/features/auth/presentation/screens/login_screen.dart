@@ -419,7 +419,23 @@ class _EmailLoginPane extends StatelessWidget {
         const SizedBox(height: 16),
         PkButton(
             label: 'Sign In', loading: busy, expand: true, onPressed: onSubmit),
-        const SizedBox(height: 14),
+        Align(
+          alignment: Alignment.centerRight,
+          child: TextButton(
+            onPressed: () => context.go('/forgot-password'),
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 4),
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            child: Text(
+              'Forgot password?',
+              style: AppTextStyles.body(size: 13, color: AppColors.pkmnBlue)
+                  .copyWith(decoration: TextDecoration.underline),
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
         Wrap(
           alignment: WrapAlignment.center,
           crossAxisAlignment: WrapCrossAlignment.center,

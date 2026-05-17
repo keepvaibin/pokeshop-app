@@ -16,6 +16,7 @@ import '../../features/account/presentation/screens/my_sctcg_screen.dart';
 import '../../features/auth/presentation/providers/auth_controller.dart';
 import '../../features/auth/presentation/screens/login_screen.dart';
 import '../../features/auth/presentation/screens/register_screen.dart';
+import '../../features/auth/presentation/screens/forgot_password_screen.dart';
 import '../../features/cart/presentation/screens/cart_screen.dart';
 import '../../features/checkout/presentation/screens/checkout_screen.dart';
 import '../../features/home/presentation/screens/delivery_info_screen.dart';
@@ -40,6 +41,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
           path: '/splash', builder: (context, state) => const SplashScreen()),
       GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
+      GoRoute(
+          path: '/forgot-password',
+          builder: (context, state) => const ForgotPasswordScreen()),
       GoRoute(
           path: '/register',
           builder: (context, state) => const RegisterScreen()),
