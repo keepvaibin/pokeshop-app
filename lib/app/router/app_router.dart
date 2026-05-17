@@ -252,6 +252,8 @@ class RouterNotifier extends ChangeNotifier {
     }
 
     if (isAuthRoute && auth.isAuthenticated) {
+      final from = state.uri.queryParameters['from'];
+      if (from != null && from.isNotEmpty) return from;
       return auth.isAdmin ? '/admin' : '/';
     }
 

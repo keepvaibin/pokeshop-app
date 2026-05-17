@@ -401,6 +401,16 @@ class _UserDetailSheetState extends ConsumerState<_UserDetailSheet> {
                     variant: PkButtonVariant.destructive,
                     onPressed: () => _issueStrike(asInt(user['id'])),
                     expand: true),
+                if (!asBool(user['is_admin'])) ...[
+                  const SizedBox(height: 8),
+                  PkButton(
+                      label: 'Delete Account',
+                      icon: const Icon(Icons.delete_forever_outlined),
+                      variant: PkButtonVariant.destructive,
+                      onPressed: () =>
+                          _deleteUser(asInt(user['id']), asString(user['email'])),
+                      expand: true),
+                ],
                 const SizedBox(height: 16),
                 _OrdersSection(title: 'Current Orders', orders: currentOrders),
                 const SizedBox(height: 12),
@@ -438,6 +448,122 @@ class _UserDetailSheetState extends ConsumerState<_UserDetailSheet> {
     final parsed = DateTime.tryParse(value);
     if (parsed == null) return value;
     return DateFormat('MMM d, y').format(parsed.toLocal());
+  }
+
+  Future<void> _deleteUser(int userId, String email) async {
+    // Step 1 — initial warning
+    final proceed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Account'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'This will permanently delete the account and all profile data. Orders and trade records will be preserved but anonymised.',
+              style: TextStyle(fontSize: 14),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              email,
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+            ),
+            const SizedBox(height: 12),
+            const Text('This action cannot be undone. Continue?',
+                style: TextStyle(fontSize: 13)),
+          ],
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppColors.pkmnRed),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Continue'),
+          ),
+        ],
+      ),
+    );
+    if (proceed != true || !mounted) return;
+
+    // Step 2 — type email to confirm
+    final emailController = TextEditingController();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('Final Confirmation'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  RichText(
+                    text: TextSpan(
+                      style: const TextStyle(fontSize: 13, color: Colors.black87),
+                      children: [
+                        const TextSpan(text: 'Type '),
+                        TextSpan(
+                          text: email,
+                          style: const TextStyle(
+                              fontFamily: 'monospace',
+                              fontWeight: FontWeight.bold),
+                        ),
+                        const TextSpan(text: ' to confirm permanent deletion.'),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: emailController,
+                    autofocus: true,
+                    keyboardType: TextInputType.emailAddress,
+                    decoration: const InputDecoration(
+                      labelText: 'Confirm email',
+                      border: OutlineInputBorder(),
+                    ),
+                    onChanged: (_) => setDialogState(() {}),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                    onPressed: () => Navigator.of(context).pop(false),
+                    child: const Text('Cancel')),
+                FilledButton(
+                  style:
+                      FilledButton.styleFrom(backgroundColor: AppColors.pkmnRed),
+                  onPressed: emailController.text.trim().toLowerCase() ==
+                          email.toLowerCase()
+                      ? () => Navigator.of(context).pop(true)
+                      : null,
+                  child: const Text('Delete permanently'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+    emailController.dispose();
+    if (confirmed != true || !mounted) return;
+
+    try {
+      await ref
+          .read(adminRepositoryProvider)
+          .deleteUser(userId, email);
+      if (!mounted) return;
+      Navigator.of(context).pop(); // close bottom sheet
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('$email has been deleted.')));
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('$error')));
+    }
   }
 
   Future<void> _issueStrike(int userId) async {

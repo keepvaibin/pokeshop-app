@@ -219,6 +219,17 @@ class AdminRepository {
     return loadResourceMap(ApiEndpoints.adminUserDetail(id));
   }
 
+  Future<void> deleteUser(int id, String confirmEmail) async {
+    try {
+      await _dio.delete<dynamic>(
+        ApiEndpoints.adminUserDetail(id),
+        data: {'confirm_email': confirmEmail},
+      );
+    } on DioException catch (error) {
+      throw AppException.fromDio(error);
+    }
+  }
+
   Future<List<Map<String, dynamic>>> searchUsers(String query) {
     return listResource(ApiEndpoints.searchUsers,
         queryParameters: {'q': query});
