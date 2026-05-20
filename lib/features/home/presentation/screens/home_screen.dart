@@ -54,11 +54,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               padding: EdgeInsets.zero,
               children: [
                 PkAnnouncementBanner(message: data.settings.storeAnnouncement),
-                Image.asset(
-                  'assets/other/hero-banner.jpg',
-                  width: double.infinity,
-                  height: 180,
-                  fit: BoxFit.cover,
+                AspectRatio(
+                  aspectRatio: 2.8,
+                  child: Image.asset(
+                    'assets/other/laicho_banner.png',
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                  ),
                 ),
                 _StorefrontHome(data: data),
               ],

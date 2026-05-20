@@ -6,6 +6,16 @@
 keys/
 android/key.properties
 android/*firebase-adminsdk*.json
+android/**/*firebase-adminsdk*.json
+**/*firebase-adminsdk*.json
+**/*service_account*.json
+**/*service-account*.json
+**/*private_key*.json
+**/*.pem
+**/*.p12
+**/*.p8
+.env
+.env.*
 build/
 coverage/
 ios/Flutter/ephemeral/
