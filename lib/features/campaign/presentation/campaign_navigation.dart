@@ -46,7 +46,11 @@ String? _localRouteFor(Uri uri) {
   final path = uri.path.isEmpty ? '/' : uri.path;
   if (!_isKnownNativePath(path)) return null;
 
-  return Uri(path: path, query: uri.query, fragment: uri.fragment).toString();
+  return Uri(
+    path: path,
+    query: uri.query.isEmpty ? null : uri.query,
+    fragment: uri.fragment.isEmpty ? null : uri.fragment,
+  ).toString();
 }
 
 bool _isKnownNativePath(String path) {

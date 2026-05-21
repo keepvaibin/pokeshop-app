@@ -63,10 +63,9 @@ class CampaignDetailScreen extends ConsumerWidget {
                           Align(
                             alignment: Alignment.centerLeft,
                             child: OutlinedButton.icon(
-                              onPressed: () => context.go(
-                                  item.productLineSlug == null
-                                      ? '/'
-                                      : '/${item.productLineSlug}'),
+                              onPressed: () => context.canPop()
+                                  ? context.pop()
+                                  : context.go('/'),
                               icon: const Icon(Icons.arrow_back, size: 16),
                               label: const Text('Back'),
                             ),

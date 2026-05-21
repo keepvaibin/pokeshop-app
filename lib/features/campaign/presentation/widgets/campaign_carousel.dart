@@ -56,7 +56,9 @@ class _CampaignPageViewState extends State<_CampaignPageView> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.campaigns.length != widget.campaigns.length) {
       _index = 0;
-      _controller.jumpToPage(0);
+      if (_controller.hasClients) {
+        _controller.jumpToPage(0);
+      }
       _startTimer();
     }
   }
@@ -136,6 +138,9 @@ class _CampaignSlide extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final ctaUrl = safeCampaignUri(campaign.ctaUrl);
+    final ctaLabel = campaign.ctaLabel.isEmpty ? 'Shop Now' : campaign.ctaLabel;
+
     return Material(
       color: Colors.white,
       child: Column(
@@ -202,41 +207,62 @@ class _CampaignSlide extends StatelessWidget {
             ),
             child: Padding(
               padding: const EdgeInsets.all(16),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final compact = constraints.maxWidth < 430;
+                  final titleBlock = Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        campaign.title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyles.heading(size: 19),
+                      ),
+                      if (campaign.subtitle.trim().isNotEmpty) ...[
+                        const SizedBox(height: 5),
                         Text(
-                          campaign.title,
+                          campaign.subtitle,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
-                          style: AppTextStyles.heading(size: 19),
+                          style: AppTextStyles.body(size: 12),
                         ),
-                        if (campaign.subtitle.trim().isNotEmpty) ...[
-                          const SizedBox(height: 5),
-                          Text(
-                            campaign.subtitle,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: AppTextStyles.body(size: 12),
-                          ),
-                        ],
                       ],
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  PkButton(
-                    label: campaign.ctaLabel.isEmpty
-                        ? 'Shop Now'
-                        : campaign.ctaLabel,
+                    ],
+                  );
+                  final ctaButton = PkButton(
+                    label: ctaLabel,
                     variant: PkButtonVariant.accent,
-                    onPressed: () => openCampaignUri(context, campaign.ctaUrl),
-                  ),
-                ],
+                    expand: compact,
+                    onPressed: ctaUrl == null
+                        ? null
+                        : () => openCampaignUri(context, campaign.ctaUrl),
+                  );
+
+                  if (compact) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        titleBlock,
+                        const SizedBox(height: 12),
+                        ctaButton,
+                      ],
+                    );
+                  }
+
+                  return Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Expanded(child: titleBlock),
+                      const SizedBox(width: 12),
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 180),
+                        child: ctaButton,
+                      ),
+                    ],
+                  );
+                },
               ),
             ),
           ),
