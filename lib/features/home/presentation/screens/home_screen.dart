@@ -5,6 +5,8 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/widgets/pk_announcement_banner.dart';
 import '../../../../core/widgets/cart_icon_button.dart';
+import '../../../campaign/data/campaign_repository.dart';
+import '../../../campaign/presentation/widgets/campaign_carousel.dart';
 import '../../../shop/data/shop_repository.dart';
 import '../../../shop/presentation/widgets/product_card.dart';
 
@@ -48,20 +50,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             ],
           ),
           body: RefreshIndicator(
-            onRefresh: () async => ref.invalidate(homeDataProvider),
+            onRefresh: () async {
+              ref.invalidate(homeDataProvider);
+              ref.invalidate(campaignBannersProvider('global'));
+            },
             child: ListView(
               physics: const AlwaysScrollableScrollPhysics(),
               padding: EdgeInsets.zero,
               children: [
                 PkAnnouncementBanner(message: data.settings.storeAnnouncement),
-                AspectRatio(
-                  aspectRatio: 2.8,
-                  child: Image.asset(
-                    'assets/other/laicho_banner.png',
-                    width: double.infinity,
-                    fit: BoxFit.cover,
-                  ),
-                ),
+                const StorefrontCampaignCarousel(),
                 _StorefrontHome(data: data),
               ],
             ),

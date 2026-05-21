@@ -17,6 +17,7 @@ import '../../features/auth/presentation/providers/auth_controller.dart';
 import '../../features/auth/presentation/screens/login_screen.dart';
 import '../../features/auth/presentation/screens/register_screen.dart';
 import '../../features/auth/presentation/screens/forgot_password_screen.dart';
+import '../../features/campaign/presentation/screens/campaign_detail_screen.dart';
 import '../../features/cart/presentation/screens/cart_screen.dart';
 import '../../features/checkout/presentation/screens/checkout_screen.dart';
 import '../../features/home/presentation/screens/delivery_info_screen.dart';
@@ -52,44 +53,81 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         routes: [
           GoRoute(path: '/', builder: (context, state) => const HomeScreen()),
           GoRoute(
-              path: '/shop', builder: (context, state) => const ShopScreen()),
+              path: '/shop',
+              builder: (context, state) => ShopScreen(
+                    initialSearch: _searchTextFrom(state),
+                    initialFilters: _shopFiltersFrom(state),
+                  )),
           GoRoute(
               path: '/products',
-              builder: (context, state) => const ShopScreen(title: 'Products')),
+              builder: (context, state) => ShopScreen(
+                    title: 'Products',
+                    initialSearch: _searchTextFrom(state),
+                    initialFilters: _shopFiltersFrom(state),
+                  )),
           GoRoute(
               path: '/new-releases',
-              builder: (context, state) => const ShopScreen(
-                  title: 'New Releases', initialSort: 'newest')),
+              builder: (context, state) => ShopScreen(
+                    title: 'New Releases',
+                    initialSort: 'newest',
+                    initialSearch: _searchTextFrom(state),
+                    initialFilters: _shopFiltersFrom(state),
+                  )),
           GoRoute(
               path: '/tcg',
-              builder: (context, state) =>
-                  const ShopScreen(title: 'TCG', initialCategory: 'cards')),
+              builder: (context, state) => ShopScreen(
+                    title: 'TCG',
+                    initialCategory: 'cards',
+                    initialSearch: _searchTextFrom(state),
+                    initialFilters: _shopFiltersFrom(state),
+                  )),
           GoRoute(
               path: '/tcg/cards',
-              builder: (context, state) =>
-                  const ShopScreen(title: 'Cards', initialCategory: 'cards')),
+              builder: (context, state) => ShopScreen(
+                    title: 'Cards',
+                    initialCategory: 'cards',
+                    initialSearch: _searchTextFrom(state),
+                    initialFilters: _shopFiltersFrom(state),
+                  )),
           GoRoute(
               path: '/tcg/boxes',
-              builder: (context, state) =>
-                  const ShopScreen(title: 'Boxes', initialCategory: 'boxes')),
+              builder: (context, state) => ShopScreen(
+                    title: 'Boxes',
+                    initialCategory: 'boxes',
+                    initialSearch: _searchTextFrom(state),
+                    initialFilters: _shopFiltersFrom(state),
+                  )),
           GoRoute(
               path: '/tcg/accessories',
-              builder: (context, state) => const ShopScreen(
-                  title: 'Accessories', initialCategory: 'accessories')),
+              builder: (context, state) => ShopScreen(
+                    title: 'Accessories',
+                    initialCategory: 'accessories',
+                    initialSearch: _searchTextFrom(state),
+                    initialFilters: _shopFiltersFrom(state),
+                  )),
           GoRoute(
               path: '/category/:slug',
               builder: (context, state) => ShopScreen(
                   title: 'Category',
-                  initialCategory: state.pathParameters['slug'])),
+                  initialCategory: state.pathParameters['slug'],
+                  initialSearch: _searchTextFrom(state),
+                  initialFilters: _shopFiltersFrom(state))),
           GoRoute(
               path: '/search',
-              builder: (context, state) => const SearchScreen()),
+              builder: (context, state) => SearchScreen(
+                    initialSearch: _searchTextFrom(state),
+                    initialFilters: _shopFiltersFrom(state),
+                  )),
           GoRoute(
               path: '/delivery-info',
               builder: (context, state) => const DeliveryInfoScreen()),
           GoRoute(
               path: '/product/:slug',
               builder: (context, state) => ProductDetailScreen(
+                  slug: state.pathParameters['slug'] ?? '')),
+          GoRoute(
+              path: '/campaigns/:slug',
+              builder: (context, state) => CampaignDetailScreen(
                   slug: state.pathParameters['slug'] ?? '')),
           GoRoute(
               path: '/cart', builder: (context, state) => const CartScreen()),
@@ -149,6 +187,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               builder: (context, state) => const AdminResourceScreen(
                   config: AdminResourceConfigs.promos)),
           GoRoute(
+              path: '/admin/campaigns',
+              builder: (context, state) => const AdminResourceScreen(
+                  config: AdminResourceConfigs.storefrontCampaigns)),
+          GoRoute(
               path: '/admin/wanted',
               builder: (context, state) => const AdminResourceScreen(
                   config: AdminResourceConfigs.wanted)),
@@ -168,10 +210,16 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               builder: (context, state) => const AdminStrikesScreen()),
           GoRoute(
               path: '/admin/shop',
-              builder: (context, state) => const ShopScreen()),
+              builder: (context, state) => ShopScreen(
+                    initialSearch: _searchTextFrom(state),
+                    initialFilters: _shopFiltersFrom(state),
+                  )),
           GoRoute(
               path: '/admin/search',
-              builder: (context, state) => const SearchScreen()),
+              builder: (context, state) => SearchScreen(
+                    initialSearch: _searchTextFrom(state),
+                    initialFilters: _shopFiltersFrom(state),
+                  )),
           GoRoute(
               path: '/admin/product/:slug',
               builder: (context, state) => ProductDetailScreen(
@@ -199,6 +247,23 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     ],
   );
 });
+
+String _searchTextFrom(GoRouterState state) {
+  final params = state.uri.queryParameters;
+  return params['q'] ?? params['search'] ?? '';
+}
+
+Map<String, String> _shopFiltersFrom(GoRouterState state) {
+  final filters = Map<String, String>.from(state.uri.queryParameters);
+  filters.remove('q');
+  filters.remove('search');
+  return filters;
+}
+
+String _withCurrentQuery(String path, GoRouterState state) {
+  final query = state.uri.query;
+  return query.isEmpty ? path : Uri(path: path, query: query).toString();
+}
 
 class RouterNotifier extends ChangeNotifier {
   RouterNotifier(this.ref) {
@@ -228,13 +293,14 @@ class RouterNotifier extends ChangeNotifier {
 
     if (auth.isAdmin && !adminClientPreview) {
       if (path == '/my-sctcg') return '/admin/settings';
-      if (path == '/shop') return '/admin/shop';
-      if (path == '/search') return '/admin/search';
+      if (path == '/shop') return _withCurrentQuery('/admin/shop', state);
+      if (path == '/search') return _withCurrentQuery('/admin/search', state);
       if (path == '/settings') return '/admin/settings';
       if (path == '/cart') return '/admin/cart';
       if (path == '/checkout') return '/admin/checkout';
       if (path.startsWith('/product/')) {
-        return path.replaceFirst('/product/', '/admin/product/');
+        return _withCurrentQuery(
+            path.replaceFirst('/product/', '/admin/product/'), state);
       }
     }
 

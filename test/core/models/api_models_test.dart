@@ -39,6 +39,29 @@ void main() {
     });
   });
 
+  group('StorefrontCampaign', () {
+    test('parses public campaign detail payloads', () {
+      final campaign = StorefrontCampaignDetail.fromJson({
+        'id': 1,
+        'title': 'Chaos Rising',
+        'subtitle': 'The storm is here',
+        'slug': 'chaos-rising',
+        'hero_display_url': '/media/campaign_heroes/chaos.png',
+        'body': '<p>Enter the raffle</p>',
+        'cta_label': 'Shop Chaos Rising',
+        'cta_url':
+            'https://santacruztcg.com/search?tcg_set_name=Chaos%20Rising',
+        'product_line_slug': '',
+      });
+
+      expect(campaign.slug, 'chaos-rising');
+      expect(campaign.heroImageUrl,
+          'https://api.santacruztcg.com/media/campaign_heroes/chaos.png');
+      expect(campaign.productLineSlug, isNull);
+      expect(campaign.body, contains('raffle'));
+    });
+  });
+
   group('OrderLine', () {
     test('falls back when backend image path is blank', () {
       final line = OrderLine.fromJson({

@@ -11,14 +11,18 @@ class ShopScreen extends ConsumerStatefulWidget {
   const ShopScreen(
       {this.showInlineSearch = false,
       this.title = 'Shop',
+      this.initialSearch = '',
       this.initialCategory,
       this.initialSort = 'featured',
+      this.initialFilters = const {},
       super.key});
 
   final bool showInlineSearch;
   final String title;
+  final String initialSearch;
   final String? initialCategory;
   final String initialSort;
+  final Map<String, String> initialFilters;
 
   @override
   ConsumerState<ShopScreen> createState() => _ShopScreenState();
@@ -34,8 +38,26 @@ class _ShopScreenState extends ConsumerState<ShopScreen> {
   @override
   void initState() {
     super.initState();
+    _query = widget.initialSearch;
+    _searchController.text = widget.initialSearch;
     _category = widget.initialCategory;
     _sort = widget.initialSort == 'stock-low' ? 'featured' : widget.initialSort;
+  }
+
+  @override
+  void didUpdateWidget(covariant ShopScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.initialSearch != widget.initialSearch) {
+      _query = widget.initialSearch;
+      _searchController.text = widget.initialSearch;
+    }
+    if (oldWidget.initialCategory != widget.initialCategory) {
+      _category = widget.initialCategory;
+    }
+    if (oldWidget.initialSort != widget.initialSort) {
+      _sort =
+          widget.initialSort == 'stock-low' ? 'featured' : widget.initialSort;
+    }
   }
 
   @override
@@ -51,6 +73,7 @@ class _ShopScreenState extends ConsumerState<ShopScreen> {
       category: _category,
       sort: _sort,
       inStockOnly: _inStockOnly,
+      filters: widget.initialFilters,
     );
     final items = ref.watch(shopItemsProvider(query));
     final categories = ref.watch(shopCategoriesProvider);

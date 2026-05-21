@@ -198,6 +198,85 @@ class HomepageSection {
   }
 }
 
+class StorefrontCampaignBanner {
+  const StorefrontCampaignBanner({
+    required this.id,
+    required this.title,
+    required this.slug,
+    this.subtitle = '',
+    this.heroImageUrl,
+    this.ctaLabel = 'Shop Now',
+    this.ctaUrl = '',
+    this.displayOrder = 0,
+  });
+
+  final int id;
+  final String title;
+  final String subtitle;
+  final String slug;
+  final String? heroImageUrl;
+  final String ctaLabel;
+  final String ctaUrl;
+  final int displayOrder;
+
+  factory StorefrontCampaignBanner.fromJson(Map<String, dynamic> json) {
+    return StorefrontCampaignBanner(
+      id: asInt(json['id']),
+      title: asString(json['title'], fallback: 'Campaign'),
+      subtitle: asString(json['subtitle']),
+      slug: asString(json['slug']),
+      heroImageUrl: absoluteMediaUrl(asString(json['hero_display_url'])),
+      ctaLabel: asString(json['cta_label'], fallback: 'Shop Now'),
+      ctaUrl: asString(json['cta_url']),
+      displayOrder: asInt(json['display_order']),
+    );
+  }
+}
+
+class StorefrontCampaignDetail extends StorefrontCampaignBanner {
+  const StorefrontCampaignDetail({
+    required super.id,
+    required super.title,
+    required super.slug,
+    super.subtitle,
+    super.heroImageUrl,
+    super.ctaLabel,
+    super.ctaUrl,
+    super.displayOrder,
+    this.body = '',
+    this.productLineSlug,
+    this.startsAt,
+    this.endsAt,
+  });
+
+  final String body;
+  final String? productLineSlug;
+  final String? startsAt;
+  final String? endsAt;
+
+  factory StorefrontCampaignDetail.fromJson(Map<String, dynamic> json) {
+    return StorefrontCampaignDetail(
+      id: asInt(json['id']),
+      title: asString(json['title'], fallback: 'Campaign'),
+      subtitle: asString(json['subtitle']),
+      slug: asString(json['slug']),
+      heroImageUrl: absoluteMediaUrl(asString(json['hero_display_url'])),
+      ctaLabel: asString(json['cta_label'], fallback: 'Shop Now'),
+      ctaUrl: asString(json['cta_url']),
+      displayOrder: asInt(json['display_order']),
+      body: asString(json['body']),
+      productLineSlug: _nullableString(json['product_line_slug']),
+      startsAt: _nullableString(json['starts_at']),
+      endsAt: _nullableString(json['ends_at']),
+    );
+  }
+}
+
+String? _nullableString(Object? value) {
+  final text = value?.toString().trim();
+  return text == null || text.isEmpty ? null : text;
+}
+
 class StoreSettings {
   const StoreSettings({
     this.storeAnnouncement = '',

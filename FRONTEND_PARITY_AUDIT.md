@@ -107,6 +107,7 @@ Legend: `[x]` native mobile equivalent exists, `[~]` partial/mobile foundation e
 - [~] `/access` - mobile register validates access codes and creates accounts, but the web two-step access page copy/Discord onboarding is not fully mirrored.
 - [x] `/cart` - mobile cart supports images, stock-clamped quantities, remove, totals, and checkout entry.
 - [x] `/category/[slug]` - route opens the native shop with the slug preselected as the category filter.
+- [x] `/campaigns/[slug]` - native campaign detail uses the public campaign API, hero image, safe CTA routing, and rich HTML rendering with Quill alignment/indent/table support.
 - [~] `/checkout` - mobile checkout uses real checkout, active timeslots, coupons, trade cards, payment toggles, wallet credit, and merge-aware payloads; first-time explainer and every web edge-state still need parity review.
 - [x] `/checkout/success` - mobile checkout navigates to order/receipt flows rather than a separate success page.
 - [x] `/delivery-info` - native pickup/payment information page uses the shared live recurring timeslot selector.
@@ -128,6 +129,7 @@ Legend: `[x]` native mobile equivalent exists, `[~]` partial/mobile foundation e
 - [x] `/admin/access-codes` - native CRUD for code, limit, expiry, active state, notes, usage display, and deletion.
 - [~] `/admin/cards` - native searchable catalog and edit surface for stock/state/TCG metadata via admin cards + item APIs; bulk sync job controls remain web-deeper than mobile.
 - [~] `/admin/categories` - native tabbed category/subcategory CRUD; tag editing remains web-deeper than mobile.
+- [~] `/admin/campaigns` - native campaign CRUD/list surface exists for title, subtitle, product line id, hero image URL, body HTML, CTA, active window, and order; the web rich-text editor and image upload workflow remain web-deeper than mobile.
 - [~] `/admin/coupons` - native CRUD for code, flat/percent discounts, usage limits, expiry, min total, active state, and cash-only; product/category targeting picker remains web-deeper than mobile.
 - [~] `/admin/dispatch` - native dispatch exists with fixed counted tabs, overdue separation, fulfillment/trade/standalone trade queues, receipt links, cancel/fulfill/basic trade actions, and ASAP scheduling. Still needs full per-card partial review, counteroffer text flow, item-level cancel, reschedule sheet, and standalone trade funding actions.
 - [~] `/admin/inventory` - native item CRUD/editing for title, descriptions, price, stock, image path, category/subcategory ids, limits, TCG metadata, release visibility, and active flags; image upload/order and TCG import workflow remain web-deeper than mobile.
@@ -143,6 +145,7 @@ Legend: `[x]` native mobile equivalent exists, `[~]` partial/mobile foundation e
 
 ### Shared frontend components that still need native parity checks
 
+- [~] `CampaignBanner` - native home now uses live `/api/inventory/campaigns/?scope=global` data with static banner fallback, carousel dots, detail navigation, and safe in-app/external CTA handling.
 - [~] `Navbar` - mobile has route-aware shell, client centered Shop action, admin/client preview switch, and admin menu; dropdown category parity is partial.
 - [~] `PokemonIconPicker` - mobile now uses bundled icon assets in a searchable popup and PATCHes the real profile icon id.
 - [~] `PickupTimeslotSelector` - mobile checkout uses recurring slots; admin reschedule and all web validation copy still need parity.
@@ -155,5 +158,7 @@ Legend: `[x]` native mobile equivalent exists, `[~]` partial/mobile foundation e
 - `flutter analyze`: clean
 - `flutter test`: passing
 - `flutter build apk --debug --no-pub`: passing
+- `flutter build appbundle --release --no-pub`: passing
 - Live API spot check confirmed product payloads use `stock`.
+- Live API spot check confirmed the global campaign list/detail payloads used by the native carousel/detail screen.
 - Debug APK installed on `R3GL10M8GEX` and launched via Android SDK `adb`.

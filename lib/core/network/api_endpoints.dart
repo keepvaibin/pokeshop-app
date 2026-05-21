@@ -27,6 +27,9 @@ abstract final class ApiEndpoints {
   static const String recurringTimeslots = '/inventory/recurring-timeslots/';
   static const String accessCodes = '/inventory/access-codes/';
   static const String promoBanners = '/inventory/promo-banners/';
+  static const String campaigns = '/inventory/campaigns/';
+  static const String adminStorefrontCampaigns =
+      '/inventory/admin/storefront-campaigns/';
   static const String adminCards = '/inventory/admin/cards/';
   static const String adminCardsSyncProperties =
       '/inventory/admin/cards/sync-properties/';
@@ -66,6 +69,7 @@ abstract final class ApiEndpoints {
       '/trade-ins/admin/grant-credit/';
 
   static String itemBySlug(String slug) => '/inventory/items/$slug/';
+  static String campaignBySlug(String slug) => '/inventory/campaigns/$slug/';
   static String itemReorderImages(String slug) =>
       '/inventory/items/$slug/reorder-images/';
   static String categoryBySlug(String slug) => '/inventory/categories/$slug/';
@@ -86,4 +90,6 @@ abstract final class ApiEndpoints {
   static String adminTradeInComplete(int id) =>
       '/trade-ins/admin/$id/complete/';
   static String adminTradeInReject(int id) => '/trade-ins/admin/$id/reject/';
+  static String adminStorefrontCampaignImageUpload(int id) =>
+      '/inventory/admin/storefront-campaigns/$id/upload-image/';
 }

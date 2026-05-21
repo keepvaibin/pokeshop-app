@@ -335,6 +335,49 @@ abstract final class AdminResourceConfigs {
     ],
   );
 
+  static const storefrontCampaigns = AdminResourceConfig(
+    title: 'Campaigns',
+    description:
+        'Storefront campaign posts, hero images, CTAs, and rich body HTML.',
+    listPath: ApiEndpoints.adminStorefrontCampaigns,
+    titleKeys: ['title'],
+    searchFields: ['title', 'subtitle', 'slug', 'cta_url'],
+    displayFields: [
+      AdminDisplayField('slug', 'Slug'),
+      AdminDisplayField('is_currently_active', 'Live'),
+      AdminDisplayField('is_active', 'Enabled'),
+      AdminDisplayField('display_order', 'Order'),
+    ],
+    formFields: [
+      AdminFormFieldConfig(key: 'title', label: 'Title', required: true),
+      AdminFormFieldConfig(key: 'subtitle', label: 'Subtitle'),
+      AdminFormFieldConfig(
+          key: 'product_line',
+          label: 'Product Line ID',
+          type: AdminFieldType.number,
+          helperText: 'Leave blank for the global homepage campaign.'),
+      AdminFormFieldConfig(key: 'hero_image_url', label: 'Hero Image URL'),
+      AdminFormFieldConfig(
+          key: 'body', label: 'Body HTML', type: AdminFieldType.multiline),
+      AdminFormFieldConfig(
+          key: 'cta_label', label: 'CTA Label', defaultValue: 'Shop Now'),
+      AdminFormFieldConfig(key: 'cta_url', label: 'CTA URL'),
+      AdminFormFieldConfig(
+          key: 'is_active',
+          label: 'Enabled',
+          type: AdminFieldType.boolean,
+          defaultValue: false),
+      AdminFormFieldConfig(
+          key: 'starts_at', label: 'Starts At', type: AdminFieldType.dateTime),
+      AdminFormFieldConfig(
+          key: 'ends_at', label: 'Ends At', type: AdminFieldType.dateTime),
+      AdminFormFieldConfig(
+          key: 'display_order',
+          label: 'Display Order',
+          type: AdminFieldType.number),
+    ],
+  );
+
   static const wanted = AdminResourceConfig(
     title: 'Wanted List',
     description:
@@ -919,9 +962,8 @@ class _GridResourceCard extends StatelessWidget {
     final price = config.gridPriceKey != null
         ? asDouble(item[config.gridPriceKey!])
         : null;
-    final stock = config.gridStockKey != null
-        ? asInt(item[config.gridStockKey!])
-        : null;
+    final stock =
+        config.gridStockKey != null ? asInt(item[config.gridStockKey!]) : null;
     final isActive = item.containsKey('is_active')
         ? asBool(item['is_active'], fallback: true)
         : true;
@@ -1314,8 +1356,8 @@ class _AdminResourceEditorState extends ConsumerState<AdminResourceEditor> {
             },
             itemBuilder: (context, index) {
               final img = _existingImages[index];
-              final url = absoluteMediaUrl(asString(img['url'],
-                  fallback: asString(img['image_url'])));
+              final url = absoluteMediaUrl(
+                  asString(img['url'], fallback: asString(img['image_url'])));
               return ListTile(
                 key: ValueKey(img['id']),
                 contentPadding:
@@ -1400,7 +1442,8 @@ class _AdminResourceEditorState extends ConsumerState<AdminResourceEditor> {
         OutlinedButton.icon(
           onPressed: _pickImages,
           icon: const Icon(Icons.add_photo_alternate_outlined),
-          label: Text(_pendingImages.isEmpty ? 'Add Images' : 'Replace Selection'),
+          label:
+              Text(_pendingImages.isEmpty ? 'Add Images' : 'Replace Selection'),
         ),
       ],
     );

@@ -67,6 +67,13 @@ class AdminQuickMenuScreen extends StatelessWidget {
       ready: true,
     ),
     _AdminMenuItem(
+      label: 'Campaigns',
+      description: 'Hero posts, CTAs, and campaign copy',
+      icon: Icons.article_outlined,
+      path: '/admin/campaigns',
+      ready: true,
+    ),
+    _AdminMenuItem(
       label: 'Wanted List',
       description: 'Cards the shop wants',
       icon: Icons.saved_search_outlined,
