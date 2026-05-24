@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../../../core/models/api_models.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_decorations.dart';
 import '../../../../core/theme/app_text_styles.dart';
@@ -508,7 +509,10 @@ class _OptionText extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             style: AppTextStyles.heading(size: 14)),
         const SizedBox(height: 4),
-        Text('\$${option.price.toStringAsFixed(2)}',
+        Text(
+            option.price <= 0
+                ? 'FREE'
+                : '${formatMoney(option.taxDisplay?.preTaxSubtotal ?? TaxDisplay.split(option.price).preTaxSubtotal)} + tax',
             style:
                 AppTextStyles.heading(size: 14, color: AppColors.pkmnBlueDark)),
         if (option.perWinnerLimit != null) ...[

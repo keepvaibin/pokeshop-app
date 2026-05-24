@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/models/api_models.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/widgets/pk_button.dart';
 import '../../../../core/widgets/pk_card.dart';
 import '../../../../core/widgets/pk_network_image.dart';
+import '../../../shop/data/shop_repository.dart';
 import '../providers/cart_controller.dart';
 import '../widgets/cart_quantity_control.dart';
 
@@ -16,7 +18,10 @@ class CartScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final cart = ref.watch(cartControllerProvider);
+    final settings = ref.watch(storeSettingsProvider).valueOrNull;
     final controller = ref.read(cartControllerProvider.notifier);
+    final tax =
+        TaxDisplay.split(cart.subtotal, settings?.salesTaxRatePercent ?? 9.25);
     return Scaffold(
       appBar: AppBar(title: const Text('Cart')),
       body: cart.lines.isEmpty
@@ -61,13 +66,34 @@ class CartScreen extends ConsumerWidget {
                                   mainAxisAlignment:
                                       MainAxisAlignment.spaceBetween,
                                   children: [
-                                    Text('Subtotal',
+                                    Text('Subtotal before tax',
                                         style: AppTextStyles.heading(size: 18)),
-                                    Text(
-                                        '\$${cart.subtotal.toStringAsFixed(2)}',
+                                    Text(formatMoney(tax.preTaxSubtotal),
                                         style: AppTextStyles.heading(
                                             size: 18,
                                             color: AppColors.pkmnBlueDark)),
+                                  ],
+                                ),
+                                const SizedBox(height: 6),
+                                Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text('Sales tax',
+                                        style: AppTextStyles.body(size: 13)),
+                                    Text(formatMoney(tax.salesTax),
+                                        style: AppTextStyles.body(size: 13)),
+                                  ],
+                                ),
+                                const SizedBox(height: 6),
+                                Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text('Total after tax',
+                                        style: AppTextStyles.heading(size: 15)),
+                                    Text(formatMoney(cart.subtotal),
+                                        style: AppTextStyles.heading(size: 15)),
                                   ],
                                 ),
                                 const SizedBox(height: 12),
@@ -117,11 +143,10 @@ class CartScreen extends ConsumerWidget {
                                         maxLines: 2,
                                         overflow: TextOverflow.ellipsis),
                                     const SizedBox(height: 3),
-                                    Text(
-                                        '\$${line.item.price.toStringAsFixed(2)} each',
+                                    Text('${line.item.customerPriceLabel} each',
                                         style: AppTextStyles.body(size: 12)),
                                     Text(
-                                        'Line total: \$${line.subtotal.toStringAsFixed(2)}',
+                                        'Line total: ${formatMoney(line.subtotal)}',
                                         style: AppTextStyles.heading(size: 12)),
                                   ],
                                 ),

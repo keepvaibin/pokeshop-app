@@ -50,7 +50,7 @@ class ProductCard extends ConsumerWidget {
                         overflow: TextOverflow.ellipsis,
                         style: AppTextStyles.heading(size: compact ? 14 : 16)),
                     const SizedBox(height: 6),
-                    Text('\$${item.price.toStringAsFixed(2)}',
+                    Text(item.customerPriceLabel,
                         style: AppTextStyles.heading(
                             size: 16, color: AppColors.pkmnBlueDark)),
                     const SizedBox(height: 10),

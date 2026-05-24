@@ -38,6 +38,65 @@ String? _absoluteFirstMediaUrl(Iterable<Object?> values) {
   return absoluteMediaUrl(_firstNonBlankString(values));
 }
 
+double _money(double value) => ((value + 0.0000001) * 100).round() / 100;
+
+String formatMoney(double value) => '\$${_money(value).toStringAsFixed(2)}';
+
+class TaxDisplay {
+  const TaxDisplay({
+    required this.grossTotal,
+    required this.preTaxSubtotal,
+    required this.salesTax,
+    required this.taxRatePercent,
+  });
+
+  final double grossTotal;
+  final double preTaxSubtotal;
+  final double salesTax;
+  final double taxRatePercent;
+
+  factory TaxDisplay.fromJson(Map<String, dynamic> json) {
+    return TaxDisplay(
+      grossTotal: asDouble(json['gross_total']),
+      preTaxSubtotal: asDouble(json['pre_tax_subtotal']),
+      salesTax: asDouble(json['sales_tax']),
+      taxRatePercent: asDouble(json['tax_rate_percent'], fallback: 9.25),
+    );
+  }
+
+  factory TaxDisplay.split(double grossTotal, [double taxRatePercent = 9.25]) {
+    final gross = _money(grossTotal);
+    final rate = _money(taxRatePercent);
+    if (gross <= 0 || rate <= 0) {
+      return TaxDisplay(
+        grossTotal: gross,
+        preTaxSubtotal: gross,
+        salesTax: 0,
+        taxRatePercent: rate,
+      );
+    }
+    final preTax = _money(gross / (1 + rate / 100));
+    return TaxDisplay(
+      grossTotal: gross,
+      preTaxSubtotal: preTax,
+      salesTax: _money(gross - preTax),
+      taxRatePercent: rate,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'gross_total': grossTotal.toStringAsFixed(2),
+        'pre_tax_subtotal': preTaxSubtotal.toStringAsFixed(2),
+        'sales_tax': salesTax.toStringAsFixed(2),
+        'tax_rate_percent': taxRatePercent.toStringAsFixed(2),
+      };
+}
+
+TaxDisplay? _optionalTaxDisplay(Object? value) {
+  final map = asMap(value);
+  return map.isEmpty ? null : TaxDisplay.fromJson(map);
+}
+
 class ProductItem {
   const ProductItem({
     required this.id,
@@ -60,6 +119,7 @@ class ProductItem {
     this.myCampaignItemId,
     this.campaignPrice,
     this.campaignPerWinnerLimit,
+    this.taxDisplay,
   });
 
   final int id;
@@ -82,10 +142,15 @@ class ProductItem {
   final int? myCampaignItemId;
   final double? campaignPrice;
   final int? campaignPerWinnerLimit;
+  final TaxDisplay? taxDisplay;
 
   bool get inStock => availabilityStatus == 'active' || stockQuantity > 0;
   String get cartKey =>
       '$id|${myEntitlementId ?? ''}|${myCampaignItemId ?? ''}';
+  TaxDisplay get resolvedTaxDisplay => taxDisplay ?? TaxDisplay.split(price);
+  String get customerPriceLabel => price <= 0
+      ? 'FREE'
+      : '${formatMoney(resolvedTaxDisplay.preTaxSubtotal)} + tax';
 
   int? get localQuantityLimit {
     final candidates = <int>[
@@ -104,6 +169,10 @@ class ProductItem {
     final images = asMapList(json['images']);
     final firstImage = _firstImageUrl(images);
     final campaignPrice = _optionalDouble(json['campaign_price']);
+    final taxDisplay =
+        _optionalTaxDisplay(json['effective_price_tax_display']) ??
+            _optionalTaxDisplay(json['campaign_price_tax_display']) ??
+            _optionalTaxDisplay(json['price_tax_display']);
     return ProductItem(
       id: asInt(json['id'], fallback: asInt(json['item_id'])),
       slug: asString(json['slug'],
@@ -141,6 +210,7 @@ class ProductItem {
       campaignPrice: campaignPrice,
       campaignPerWinnerLimit: _optionalInt(
           json['campaign_per_winner_limit'] ?? json['per_winner_limit']),
+      taxDisplay: taxDisplay,
     );
   }
 
@@ -178,6 +248,7 @@ class ProductItem {
         'my_campaign_item_id': myCampaignItemId,
         'campaign_price': campaignPrice,
         'campaign_per_winner_limit': campaignPerWinnerLimit,
+        'price_tax_display': taxDisplay?.toJson(),
       };
 }
 
@@ -316,6 +387,7 @@ class StoreSettings {
     this.showFooterNewsletter = true,
     this.tradeCreditPercentage = 85,
     this.tradeCashPercentage = 65,
+    this.salesTaxRatePercent = 9.25,
     this.maxTradeCardsPerOrder = 5,
     this.discordWebhookUrl = '',
     this.payVenmo = true,
@@ -339,6 +411,7 @@ class StoreSettings {
   final bool showFooterNewsletter;
   final double tradeCreditPercentage;
   final double tradeCashPercentage;
+  final double salesTaxRatePercent;
   final int maxTradeCardsPerOrder;
   final String discordWebhookUrl;
   final bool payVenmo;
@@ -366,6 +439,8 @@ class StoreSettings {
           asDouble(json['trade_credit_percentage'], fallback: 85),
       tradeCashPercentage:
           asDouble(json['trade_cash_percentage'], fallback: 65),
+      salesTaxRatePercent:
+          asDouble(json['sales_tax_rate_percent'], fallback: 9.25),
       maxTradeCardsPerOrder:
           asInt(json['max_trade_cards_per_order'], fallback: 5),
       discordWebhookUrl: asString(json['discord_webhook_url']),
@@ -482,6 +557,7 @@ class CartLine {
             'campaign_item_id': json['campaign_item_id'],
             'entitlement_id': json['entitlement_id'],
             'campaign_per_winner_limit': json['campaign_per_winner_limit'],
+            'price_tax_display': json['price_tax_display'],
           };
     return CartLine(
         item: ProductItem.fromJson(itemPayload),
@@ -515,6 +591,8 @@ class OrderLine {
       required this.price,
       this.id,
       this.orderItemIds = const [],
+      this.priceTaxDisplay,
+      this.subtotalTaxDisplay,
       this.imageUrl});
 
   final int? id;
@@ -522,6 +600,8 @@ class OrderLine {
   final int quantity;
   final double price;
   final List<int> orderItemIds;
+  final TaxDisplay? priceTaxDisplay;
+  final TaxDisplay? subtotalTaxDisplay;
   final String? imageUrl;
 
   double get subtotal => price * quantity;
@@ -535,6 +615,8 @@ class OrderLine {
       price: asDouble(json['price_at_purchase'],
           fallback: asDouble(json['item_price'])),
       orderItemIds: _asIntList(json['order_item_ids']),
+      priceTaxDisplay: _optionalTaxDisplay(json['price_tax_display']),
+      subtotalTaxDisplay: _optionalTaxDisplay(json['subtotal_tax_display']),
       imageUrl: _absoluteFirstMediaUrl(
           [_firstImageUrl(images), json['image_path'], json['image_url']]),
     );
@@ -560,6 +642,7 @@ class OrderSummary {
     this.discountApplied = 0,
     this.tradeCreditApplied = 0,
     this.storeCreditApplied = 0,
+    this.taxSummary,
     this.counterofferMessage = '',
     this.itemsSummary = '',
     this.customerEmail = '',
@@ -581,6 +664,7 @@ class OrderSummary {
   final double discountApplied;
   final double tradeCreditApplied;
   final double storeCreditApplied;
+  final TaxDisplay? taxSummary;
   final String counterofferMessage;
   final String itemsSummary;
   final String customerEmail;
@@ -590,9 +674,12 @@ class OrderSummary {
   final String pickupDate;
 
   double get netDue =>
-      (total - discountApplied - tradeCreditApplied - storeCreditApplied)
+      (taxIncludedTotalAfterDiscount - tradeCreditApplied - storeCreditApplied)
           .clamp(0, double.infinity)
           .toDouble();
+  double get taxIncludedTotalAfterDiscount =>
+      taxSummary?.grossTotal ??
+      (total - discountApplied).clamp(0, double.infinity).toDouble();
 
   factory OrderSummary.fromJson(Map<String, dynamic> json) {
     final lineData = asMapList(json['display_items']).isNotEmpty
@@ -601,6 +688,20 @@ class OrderSummary {
     final lines = lineData.map(OrderLine.fromJson).toList();
     final computedTotal =
         lines.fold<double>(0, (sum, line) => sum + line.subtotal);
+    final taxSummaryMap = asMap(json['tax_summary']);
+    final snapshotTaxSummary = taxSummaryMap.isNotEmpty
+        ? TaxDisplay.fromJson(taxSummaryMap)
+        : (json['pre_tax_subtotal'] != null &&
+                json['sales_tax_amount'] != null &&
+                json['tax_inclusive_total'] != null &&
+                json['sales_tax_rate_percent'] != null)
+            ? TaxDisplay(
+                grossTotal: asDouble(json['tax_inclusive_total']),
+                preTaxSubtotal: asDouble(json['pre_tax_subtotal']),
+                salesTax: asDouble(json['sales_tax_amount']),
+                taxRatePercent: asDouble(json['sales_tax_rate_percent']),
+              )
+            : null;
     return OrderSummary(
       id: asInt(json['id']),
       orderId: asString(json['order_id']),
@@ -616,6 +717,7 @@ class OrderSummary {
       discountApplied: asDouble(json['discount_applied']),
       tradeCreditApplied: asDouble(json['trade_credit_applied']),
       storeCreditApplied: asDouble(json['store_credit_applied']),
+      taxSummary: snapshotTaxSummary,
       counterofferMessage: asString(json['counteroffer_message']),
       itemsSummary: asString(json['items_summary']),
       customerEmail: asString(json['user_email'],

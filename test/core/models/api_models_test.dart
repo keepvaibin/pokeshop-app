@@ -40,6 +40,26 @@ void main() {
       expect(item.localQuantityLimit, 4);
     });
 
+    test('keeps gross price and exposes pre-tax customer label', () {
+      final item = ProductItem.fromJson({
+        'id': 10,
+        'slug': 'taxed-pack',
+        'title': 'Taxed Pack',
+        'price': '37.00',
+        'price_tax_display': {
+          'gross_total': '37.00',
+          'pre_tax_subtotal': '33.87',
+          'sales_tax': '3.13',
+          'tax_rate_percent': '9.25',
+        },
+      });
+
+      expect(item.price, 37.0);
+      expect(item.resolvedTaxDisplay.preTaxSubtotal, 33.87);
+      expect(item.resolvedTaxDisplay.salesTax, 3.13);
+      expect(item.customerPriceLabel, '\$33.87 + tax');
+    });
+
     test('prefers uploaded item images over blank or remote image paths', () {
       final item = ProductItem.fromJson({
         'id': 8,
@@ -91,6 +111,39 @@ void main() {
       });
 
       expect(line.imageUrl, 'https://images.example.com/perfect-order.png');
+    });
+  });
+
+  group('OrderSummary', () {
+    test('uses tax snapshot as the post-discount total before credits', () {
+      final order = OrderSummary.fromJson({
+        'id': 1,
+        'order_id': 'order-1',
+        'status': 'pending',
+        'payment_method': 'venmo',
+        'delivery_method': 'asap',
+        'discount_applied': '0.00',
+        'trade_credit_applied': '10.00',
+        'store_credit_applied': '5.00',
+        'tax_summary': {
+          'gross_total': '37.00',
+          'pre_tax_subtotal': '33.87',
+          'sales_tax': '3.13',
+          'tax_rate_percent': '9.25',
+        },
+        'display_items': [
+          {
+            'item_title': 'Taxed Pack',
+            'quantity': 1,
+            'price_at_purchase': '37.00',
+          }
+        ],
+      });
+
+      expect(order.total, 37.0);
+      expect(order.taxSummary?.preTaxSubtotal, 33.87);
+      expect(order.taxIncludedTotalAfterDiscount, 37.0);
+      expect(order.netDue, 22.0);
     });
   });
 

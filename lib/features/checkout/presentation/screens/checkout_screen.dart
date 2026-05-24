@@ -94,7 +94,11 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                 physics: const AlwaysScrollableScrollPhysics(),
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
                 children: [
-                  _OrderSummary(lines: cart.lines),
+                  _OrderSummary(
+                    lines: cart.lines,
+                    checkout: checkout,
+                    settings: settings.valueOrNull,
+                  ),
                   const SizedBox(height: 12),
                   _DeliverySection(checkout: checkout, controller: controller),
                   const SizedBox(height: 12),
@@ -145,13 +149,24 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 }
 
 class _OrderSummary extends StatelessWidget {
-  const _OrderSummary({required this.lines});
+  const _OrderSummary({
+    required this.lines,
+    required this.checkout,
+    required this.settings,
+  });
 
   final List<CartLine> lines;
+  final CheckoutState checkout;
+  final StoreSettings? settings;
 
   @override
   Widget build(BuildContext context) {
     final total = lines.fold<double>(0, (sum, line) => sum + line.subtotal);
+    final discount = checkout.coupon?.computedDiscount ?? 0;
+    final discountedTotal =
+        (total - discount).clamp(0, double.infinity).toDouble();
+    final tax = TaxDisplay.split(
+        discountedTotal, settings?.salesTaxRatePercent ?? 9.25);
     return PkCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -166,7 +181,7 @@ class _OrderSummary extends StatelessWidget {
                       child: Text('${line.item.title} x${line.quantity}',
                           style: AppTextStyles.body()),
                     ),
-                    Text('\$${line.subtotal.toStringAsFixed(2)}',
+                    Text(formatMoney(line.subtotal),
                         style: AppTextStyles.heading(size: 13)),
                   ],
                 ),
@@ -175,14 +190,48 @@ class _OrderSummary extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('Subtotal', style: AppTextStyles.heading(size: 18)),
-              Text('\$${total.toStringAsFixed(2)}',
+              Text('Subtotal before tax',
+                  style: AppTextStyles.heading(size: 18)),
+              Text(formatMoney(tax.preTaxSubtotal),
                   style: AppTextStyles.heading(
                       size: 18, color: AppColors.pkmnBlueDark)),
             ],
           ),
+          if (discount > 0) ...[
+            const SizedBox(height: 6),
+            _CheckoutLedgerRow(label: 'Items total', value: formatMoney(total)),
+            _CheckoutLedgerRow(
+                label: 'Coupon discount', value: '-${formatMoney(discount)}'),
+          ],
+          const SizedBox(height: 6),
+          _CheckoutLedgerRow(
+              label: 'Sales tax', value: formatMoney(tax.salesTax)),
+          _CheckoutLedgerRow(
+              label: 'Total after tax',
+              value: formatMoney(discountedTotal),
+              emphasized: true),
         ],
       ),
+    );
+  }
+}
+
+class _CheckoutLedgerRow extends StatelessWidget {
+  const _CheckoutLedgerRow(
+      {required this.label, required this.value, this.emphasized = false});
+
+  final String label;
+  final String value;
+  final bool emphasized;
+
+  @override
+  Widget build(BuildContext context) {
+    final style = emphasized
+        ? AppTextStyles.heading(size: 14)
+        : AppTextStyles.body(size: 13);
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [Text(label, style: style), Text(value, style: style)],
     );
   }
 }
@@ -420,14 +469,15 @@ class _TradeStepState extends ConsumerState<_TradeStep> {
               ),
             ],
           ),
-          if (cards.isNotEmpty) ...[          const SizedBox(height: 12),
+          if (cards.isNotEmpty) ...[
+            const SizedBox(height: 12),
             ...cards.indexed.map((entry) => Padding(
                   padding: const EdgeInsets.only(bottom: 8),
                   child: Row(
                     children: [
                       Expanded(
                         child: Text(
-                          '${entry.$2.cardName}'  
+                          '${entry.$2.cardName}'
                           '${entry.$2.setName.isNotEmpty ? " · ${entry.$2.setName}" : ""}'
                           ' — \$${entry.$2.estimatedValue.toStringAsFixed(2)}',
                           style: AppTextStyles.body(size: 13),

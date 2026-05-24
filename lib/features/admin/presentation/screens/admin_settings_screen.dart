@@ -28,6 +28,7 @@ class _AdminSettingsScreenState extends ConsumerState<AdminSettingsScreen> {
   final _announcementExpiresAtController = TextEditingController();
   final _tradeCreditController = TextEditingController();
   final _tradeCashController = TextEditingController();
+  final _salesTaxController = TextEditingController();
   final _maxTradeCardsController = TextEditingController();
   final _webhookController = TextEditingController();
   final _ucscInviteController = TextEditingController();
@@ -67,6 +68,7 @@ class _AdminSettingsScreenState extends ConsumerState<AdminSettingsScreen> {
     _announcementExpiresAtController.dispose();
     _tradeCreditController.dispose();
     _tradeCashController.dispose();
+    _salesTaxController.dispose();
     _maxTradeCardsController.dispose();
     _webhookController.dispose();
     _ucscInviteController.dispose();
@@ -183,6 +185,12 @@ class _AdminSettingsScreenState extends ConsumerState<AdminSettingsScreen> {
               label: 'Trade Cash %',
               keyboardType: TextInputType.number,
             ),
+          ),
+          const SizedBox(height: 20),
+          PkInput(
+            controller: _salesTaxController,
+            label: 'Sales Tax %',
+            keyboardType: TextInputType.number,
           ),
           const SizedBox(height: 20),
           PkInput(
@@ -599,6 +607,7 @@ class _AdminSettingsScreenState extends ConsumerState<AdminSettingsScreen> {
       settings.announcementExpiresAt,
       settings.tradeCreditPercentage,
       settings.tradeCashPercentage,
+      settings.salesTaxRatePercent,
       settings.maxTradeCardsPerOrder,
       settings.discordWebhookUrl,
       settings.ucscDiscordInvite,
@@ -620,10 +629,11 @@ class _AdminSettingsScreenState extends ConsumerState<AdminSettingsScreen> {
     _syncedSettingsKey = key;
     _announcementController.text = settings.storeAnnouncement;
     _announcementExpiresAtController.text =
-      _formatExistingDateTime(settings.announcementExpiresAt);
+        _formatExistingDateTime(settings.announcementExpiresAt);
     _tradeCreditController.text =
         settings.tradeCreditPercentage.toStringAsFixed(0);
     _tradeCashController.text = settings.tradeCashPercentage.toStringAsFixed(0);
+    _salesTaxController.text = settings.salesTaxRatePercent.toStringAsFixed(2);
     _maxTradeCardsController.text = '${settings.maxTradeCardsPerOrder}';
     _webhookController.text = settings.discordWebhookUrl;
     _ucscInviteController.text = settings.ucscDiscordInvite ?? '';
@@ -657,6 +667,7 @@ class _AdminSettingsScreenState extends ConsumerState<AdminSettingsScreen> {
         'trade_credit_percentage':
             _doubleValue(_tradeCreditController.text, 85),
         'trade_cash_percentage': _doubleValue(_tradeCashController.text, 65),
+        'sales_tax_rate_percent': _doubleValue(_salesTaxController.text, 9.25),
         'max_trade_cards_per_order':
             _intValue(_maxTradeCardsController.text, 5),
         'discord_webhook_url': _webhookController.text.trim(),

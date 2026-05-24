@@ -371,11 +371,28 @@ class _PaymentLedger extends StatelessWidget {
         children: [
           Text('Payment Summary', style: AppTextStyles.heading(size: 18)),
           const SizedBox(height: 10),
-          _LedgerRow(label: 'Subtotal', value: _money(order.total)),
-          if (order.discountApplied > 0)
+          if (order.taxSummary != null) ...[
+            if (order.discountApplied > 0) ...[
+              _LedgerRow(label: 'Items total', value: _money(order.total)),
+              _LedgerRow(
+                  label: 'Coupon Discount',
+                  value: '-${_money(order.discountApplied)}'),
+            ],
             _LedgerRow(
-                label: 'Coupon Discount',
-                value: '-${_money(order.discountApplied)}'),
+                label: 'Subtotal before tax',
+                value: _money(order.taxSummary!.preTaxSubtotal)),
+            _LedgerRow(
+                label: 'Sales tax', value: _money(order.taxSummary!.salesTax)),
+            _LedgerRow(
+                label: 'Total after tax',
+                value: _money(order.taxSummary!.grossTotal)),
+          ] else ...[
+            _LedgerRow(label: 'Subtotal', value: _money(order.total)),
+            if (order.discountApplied > 0)
+              _LedgerRow(
+                  label: 'Coupon Discount',
+                  value: '-${_money(order.discountApplied)}'),
+          ],
           if (order.tradeCreditApplied > 0)
             _LedgerRow(
                 label: 'Trade Credit Applied',
@@ -704,9 +721,20 @@ Future<Uint8List> _buildInvoicePdf(
             'Pickup: ${order.pickupLabel.isEmpty ? order.deliveryMethod : order.pickupLabel}'),
         pw.Text('Payment: ${order.paymentMethod.replaceAll('_', ' ')}'),
         pw.SizedBox(height: 18),
-        _pdfLedgerRow('Subtotal', order.total),
-        if (order.discountApplied > 0)
-          _pdfLedgerRow('Discount', -order.discountApplied),
+        if (order.taxSummary != null) ...[
+          if (order.discountApplied > 0) ...[
+            _pdfLedgerRow('Items total', order.total),
+            _pdfLedgerRow('Discount', -order.discountApplied),
+          ],
+          _pdfLedgerRow(
+              'Subtotal before tax', order.taxSummary!.preTaxSubtotal),
+          _pdfLedgerRow('Sales tax', order.taxSummary!.salesTax),
+          _pdfLedgerRow('Total after tax', order.taxSummary!.grossTotal),
+        ] else ...[
+          _pdfLedgerRow('Subtotal', order.total),
+          if (order.discountApplied > 0)
+            _pdfLedgerRow('Discount', -order.discountApplied),
+        ],
         if (order.tradeCreditApplied > 0)
           _pdfLedgerRow('Trade credit', -order.tradeCreditApplied),
         if (order.storeCreditApplied > 0)

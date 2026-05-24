@@ -19,6 +19,7 @@ class DropOption {
     this.groupId,
     this.imageUrl,
     this.perWinnerLimit,
+    this.taxDisplay,
     this.isSoldOut = false,
     this.isPurchased = false,
     this.productQuery = '',
@@ -33,6 +34,7 @@ class DropOption {
   final double price;
   final String? imageUrl;
   final int? perWinnerLimit;
+  final TaxDisplay? taxDisplay;
   final bool isAvailable;
   final bool isSoldOut;
   final bool isPurchased;
@@ -52,6 +54,7 @@ class DropOption {
       title: asString(json['title'], fallback: 'Untitled Item'),
       slug: asString(json['slug']),
       price: asDouble(json['price']),
+      taxDisplay: _optionalTaxDisplay(json['price_tax_display']),
       imageUrl: absoluteMediaUrl(_firstNonBlank([
         firstImage['url'],
         firstImage['image'],
@@ -79,6 +82,7 @@ class DropOption {
       myEntitlementId: entitlementId,
       myCampaignItemId: campaignItemId,
       campaignPerWinnerLimit: perWinnerLimit,
+      taxDisplay: taxDisplay,
     );
   }
 
@@ -89,6 +93,11 @@ class DropOption {
     };
     return Uri(path: '/product/$slug', queryParameters: query).toString();
   }
+}
+
+TaxDisplay? _optionalTaxDisplay(Object? value) {
+  final map = asMap(value);
+  return map.isEmpty ? null : TaxDisplay.fromJson(map);
 }
 
 class DropGroup {
