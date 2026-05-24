@@ -7,6 +7,8 @@ import '../../../../core/widgets/pk_announcement_banner.dart';
 import '../../../../core/widgets/cart_icon_button.dart';
 import '../../../campaign/data/campaign_repository.dart';
 import '../../../campaign/presentation/widgets/campaign_carousel.dart';
+import '../../../drops/data/drop_repository.dart';
+import '../../../drops/presentation/widgets/my_drops_section.dart';
 import '../../../shop/data/shop_repository.dart';
 import '../../../shop/presentation/widgets/product_card.dart';
 
@@ -53,6 +55,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             onRefresh: () async {
               ref.invalidate(homeDataProvider);
               ref.invalidate(campaignBannersProvider('global'));
+              ref.invalidate(myDropsProvider);
             },
             child: ListView(
               physics: const AlwaysScrollableScrollPhysics(),
@@ -83,6 +86,8 @@ class _StorefrontHome extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _ProductStrip(title: 'New Arrivals', items: data.newArrivals),
+          const SizedBox(height: 24),
+          const MyDropsSection(),
           const SizedBox(height: 24),
           _ProductStrip(title: 'All Products', items: data.items),
         ],

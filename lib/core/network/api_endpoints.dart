@@ -36,6 +36,7 @@ abstract final class ApiEndpoints {
   static const String tcgInventorySearch = '/inventory/tcg-inventory-search/';
   static const String tcgSearch = '/inventory/tcg-search/';
   static const String wantedCards = '/inventory/wanted/';
+  static const String myDrops = '/inventory/my-drops/';
 
   static const String cart = '/orders/cart/';
   static const String cartCheck = '/orders/cart/check/';
@@ -69,6 +70,10 @@ abstract final class ApiEndpoints {
       '/trade-ins/admin/grant-credit/';
 
   static String itemBySlug(String slug) => '/inventory/items/$slug/';
+  static String dropClaim(String entitlementId) =>
+      '/inventory/drops/claim/$entitlementId/';
+  static String dropSelect(String entitlementId) =>
+      '/inventory/drops/claim/$entitlementId/select/';
   static String campaignBySlug(String slug) => '/inventory/campaigns/$slug/';
   static String itemReorderImages(String slug) =>
       '/inventory/items/$slug/reorder-images/';

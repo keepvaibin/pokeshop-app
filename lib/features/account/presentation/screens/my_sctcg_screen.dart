@@ -10,6 +10,8 @@ import '../../../../core/widgets/pk_card.dart';
 import '../../../../core/widgets/pk_status_badge.dart';
 import '../../../../core/widgets/pokemon_avatar.dart';
 import '../../../auth/presentation/providers/auth_controller.dart';
+import '../../../drops/data/drop_repository.dart';
+import '../../../drops/presentation/widgets/my_drops_section.dart';
 import '../../../orders/data/orders_repository.dart';
 import '../../../trade_in/data/trade_in_repository.dart';
 
@@ -33,6 +35,7 @@ class MySctcgScreen extends ConsumerWidget {
         onRefresh: () async {
           ref.invalidate(myOrdersProvider);
           ref.invalidate(walletProvider);
+          ref.invalidate(myDropsProvider);
           await ref.read(authControllerProvider.notifier).refreshUser();
         },
         child: LayoutBuilder(
@@ -91,6 +94,8 @@ class MySctcgScreen extends ConsumerWidget {
                           strikeCount: user.strikeCount,
                           wallet: wallet,
                         ),
+                        const SizedBox(height: 12),
+                        const MyDropsSection(),
                         const SizedBox(height: 12),
                         const _QuickActions(),
                         const SizedBox(height: 12),

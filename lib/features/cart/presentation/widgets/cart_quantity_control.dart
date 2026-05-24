@@ -22,7 +22,7 @@ class CartQuantityControl extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final quantity = ref.watch(cartControllerProvider).quantityFor(item.id);
+    final quantity = ref.watch(cartControllerProvider).quantityFor(item);
     final controller = ref.read(cartControllerProvider.notifier);
 
     if (quantity <= 0) {

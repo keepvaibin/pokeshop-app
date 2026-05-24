@@ -22,6 +22,24 @@ void main() {
       expect(item.category, 'cards');
     });
 
+    test('parses drop campaign context fields', () {
+      final item = ProductItem.fromJson({
+        'id': 9,
+        'slug': 'chaos-pack',
+        'title': 'Chaos Rising Pack',
+        'price': '6.00',
+        'campaign_price': '5.00',
+        'my_entitlement_id': '00000000-0000-0000-0000-000000000123',
+        'my_campaign_item_id': 44,
+        'campaign_per_winner_limit': 4,
+      });
+
+      expect(item.price, 5.0);
+      expect(item.myCampaignItemId, 44);
+      expect(item.myEntitlementId, '00000000-0000-0000-0000-000000000123');
+      expect(item.localQuantityLimit, 4);
+    });
+
     test('prefers uploaded item images over blank or remote image paths', () {
       final item = ProductItem.fromJson({
         'id': 8,
@@ -83,6 +101,28 @@ void main() {
       final line = CartLine(item: item, quantity: 2);
 
       expect(line.toCheckoutJson(), {'item': 1, 'item_id': 1, 'quantity': 2});
+    });
+
+    test('serializes raffle cart context for checkout', () {
+      final item = ProductItem.fromJson({
+        'id': 2,
+        'slug': 'raffle-card',
+        'title': 'Raffle Card',
+        'price': '4.00',
+        'entitlement_id': '00000000-0000-0000-0000-000000000456',
+        'campaign_item_id': 77,
+      });
+      final line = CartLine(item: item, quantity: 1);
+
+      expect(line.toCheckoutJson(), {
+        'item': 2,
+        'item_id': 2,
+        'quantity': 1,
+        'campaign_item': 77,
+        'campaign_item_id': 77,
+        'entitlement': '00000000-0000-0000-0000-000000000456',
+        'entitlement_id': '00000000-0000-0000-0000-000000000456',
+      });
     });
 
     test('serializes timeslot selection with both legacy and explicit ids', () {

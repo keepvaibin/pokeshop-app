@@ -54,6 +54,35 @@ class ShopQuery {
       search, homeFeed, page, category, sort, inStockOnly, filters.toString());
 }
 
+class ProductLookup {
+  const ProductLookup({
+    required this.slug,
+    this.entitlementId,
+    this.campaignItemId,
+  });
+
+  final String slug;
+  final String? entitlementId;
+  final int? campaignItemId;
+
+  Map<String, dynamic> get queryParameters => {
+        if (entitlementId != null && entitlementId!.isNotEmpty)
+          'entitlement': entitlementId,
+        if (campaignItemId != null) 'campaign_item': campaignItemId,
+      };
+
+  @override
+  bool operator ==(Object other) {
+    return other is ProductLookup &&
+        other.slug == slug &&
+        other.entitlementId == entitlementId &&
+        other.campaignItemId == campaignItemId;
+  }
+
+  @override
+  int get hashCode => Object.hash(slug, entitlementId, campaignItemId);
+}
+
 class HomeData {
   const HomeData(
       {required this.settings,
@@ -82,10 +111,12 @@ class ShopRepository {
     }
   }
 
-  Future<ProductItem> getItem(String slug) async {
+  Future<ProductItem> getItem(ProductLookup lookup) async {
     try {
-      final response =
-          await _dio.get<Map<String, dynamic>>(ApiEndpoints.itemBySlug(slug));
+      final response = await _dio.get<Map<String, dynamic>>(
+        ApiEndpoints.itemBySlug(lookup.slug),
+        queryParameters: lookup.queryParameters,
+      );
       return ProductItem.fromJson(response.data ?? const <String, dynamic>{});
     } on DioException catch (error) {
       throw AppException.fromDio(error);
@@ -159,8 +190,8 @@ final shopItemsProvider = FutureProvider.family<List<ProductItem>, ShopQuery>(
     (ref, query) => ref.watch(shopRepositoryProvider).getItems(query));
 final shopCategoriesProvider = FutureProvider<List<StoreCategory>>(
     (ref) => ref.watch(shopRepositoryProvider).getCategories());
-final productProvider = FutureProvider.family<ProductItem, String>(
-    (ref, slug) => ref.watch(shopRepositoryProvider).getItem(slug));
+final productProvider = FutureProvider.family<ProductItem, ProductLookup>(
+    (ref, lookup) => ref.watch(shopRepositoryProvider).getItem(lookup));
 final recurringTimeslotsProvider = FutureProvider<List<RecurringTimeslot>>(
     (ref) => ref.watch(shopRepositoryProvider).getRecurringTimeslots());
 final storeSettingsProvider = FutureProvider<StoreSettings>(

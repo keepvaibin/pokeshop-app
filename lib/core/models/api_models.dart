@@ -56,6 +56,10 @@ class ProductItem {
     this.purchaseLimitDaily,
     this.purchaseLimitWeekly,
     this.purchaseLimitLifetime,
+    this.myEntitlementId,
+    this.myCampaignItemId,
+    this.campaignPrice,
+    this.campaignPerWinnerLimit,
   });
 
   final int id;
@@ -74,11 +78,18 @@ class ProductItem {
   final int? purchaseLimitDaily;
   final int? purchaseLimitWeekly;
   final int? purchaseLimitLifetime;
+  final String? myEntitlementId;
+  final int? myCampaignItemId;
+  final double? campaignPrice;
+  final int? campaignPerWinnerLimit;
 
   bool get inStock => availabilityStatus == 'active' || stockQuantity > 0;
+  String get cartKey =>
+      '$id|${myEntitlementId ?? ''}|${myCampaignItemId ?? ''}';
 
   int? get localQuantityLimit {
     final candidates = <int>[
+      if (campaignPerWinnerLimit != null) campaignPerWinnerLimit!,
       if (stockQuantity > 0) stockQuantity,
       if (purchaseLimitDaily != null) purchaseLimitDaily!,
       if (purchaseLimitWeekly != null) purchaseLimitWeekly!,
@@ -92,12 +103,15 @@ class ProductItem {
   factory ProductItem.fromJson(Map<String, dynamic> json) {
     final images = asMapList(json['images']);
     final firstImage = _firstImageUrl(images);
+    final campaignPrice = _optionalDouble(json['campaign_price']);
     return ProductItem(
-      id: asInt(json['id']),
-      slug: asString(json['slug'], fallback: asInt(json['id']).toString()),
+      id: asInt(json['id'], fallback: asInt(json['item_id'])),
+      slug: asString(json['slug'],
+          fallback:
+              asInt(json['id'], fallback: asInt(json['item_id'])).toString()),
       title: asString(json['title'],
           fallback: asString(json['name'], fallback: 'Untitled Item')),
-      price: asDouble(json['price']),
+      price: campaignPrice ?? asDouble(json['price']),
       description: asString(json['description']),
       imageUrl: _absoluteFirstMediaUrl(
           [firstImage, json['image_url'], json['image_path']]),
@@ -120,6 +134,13 @@ class ProductItem {
           _optionalInt(json['purchase_limit_weekly'] ?? json['max_per_week']),
       purchaseLimitLifetime: _optionalInt(
           json['purchase_limit_lifetime'] ?? json['max_total_per_user']),
+      myEntitlementId:
+          _nullableString(json['my_entitlement_id'] ?? json['entitlement_id']),
+      myCampaignItemId:
+          _optionalInt(json['my_campaign_item_id'] ?? json['campaign_item_id']),
+      campaignPrice: campaignPrice,
+      campaignPerWinnerLimit: _optionalInt(
+          json['campaign_per_winner_limit'] ?? json['per_winner_limit']),
     );
   }
 
@@ -129,8 +150,15 @@ class ProductItem {
     return parsed <= 0 ? null : parsed;
   }
 
+  static double? _optionalDouble(Object? value) {
+    if (value == null) return null;
+    final parsed = asDouble(value, fallback: -1);
+    return parsed < 0 ? null : parsed;
+  }
+
   Map<String, dynamic> toJson() => {
         'id': id,
+        'item_id': id,
         'slug': slug,
         'title': title,
         'price': price,
@@ -146,6 +174,10 @@ class ProductItem {
         'purchase_limit_daily': purchaseLimitDaily,
         'purchase_limit_weekly': purchaseLimitWeekly,
         'purchase_limit_lifetime': purchaseLimitLifetime,
+        'my_entitlement_id': myEntitlementId,
+        'my_campaign_item_id': myCampaignItemId,
+        'campaign_price': campaignPrice,
+        'campaign_per_winner_limit': campaignPerWinnerLimit,
       };
 }
 
@@ -434,15 +466,46 @@ class CartLine {
   }
 
   factory CartLine.fromJson(Map<String, dynamic> json) {
+    final nestedItem = asMap(json['item']);
+    final itemPayload = nestedItem.isNotEmpty
+        ? nestedItem
+        : <String, dynamic>{
+            'id': json['item_id'],
+            'item_id': json['item_id'],
+            'slug': json['slug'],
+            'title': json['title'],
+            'price': json['price'],
+            'description': json['description'],
+            'image_path': json['image_path'],
+            'stock': json['stock'],
+            'max_per_user': json['max_per_user'],
+            'campaign_item_id': json['campaign_item_id'],
+            'entitlement_id': json['entitlement_id'],
+            'campaign_per_winner_limit': json['campaign_per_winner_limit'],
+          };
     return CartLine(
-        item: ProductItem.fromJson(asMap(json['item'])),
+        item: ProductItem.fromJson(itemPayload),
         quantity: asInt(json['quantity'], fallback: 1));
   }
 
   Map<String, dynamic> toJson() =>
       {'item': item.toJson(), 'quantity': quantity};
-  Map<String, dynamic> toCheckoutJson() =>
-      {'item': item.id, 'item_id': item.id, 'quantity': quantity};
+  Map<String, dynamic> toCheckoutJson() {
+    final payload = <String, dynamic>{
+      'item': item.id,
+      'item_id': item.id,
+      'quantity': quantity,
+    };
+    if (item.myCampaignItemId != null) {
+      payload['campaign_item'] = item.myCampaignItemId;
+      payload['campaign_item_id'] = item.myCampaignItemId;
+    }
+    if (item.myEntitlementId != null) {
+      payload['entitlement'] = item.myEntitlementId;
+      payload['entitlement_id'] = item.myEntitlementId;
+    }
+    return payload;
+  }
 }
 
 class OrderLine {

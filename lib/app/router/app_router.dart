@@ -20,6 +20,7 @@ import '../../features/auth/presentation/screens/forgot_password_screen.dart';
 import '../../features/campaign/presentation/screens/campaign_detail_screen.dart';
 import '../../features/cart/presentation/screens/cart_screen.dart';
 import '../../features/checkout/presentation/screens/checkout_screen.dart';
+import '../../features/drops/presentation/screens/drop_claim_screen.dart';
 import '../../features/home/presentation/screens/delivery_info_screen.dart';
 import '../../features/home/presentation/screens/home_screen.dart';
 import '../../features/orders/presentation/screens/order_detail_screen.dart';
@@ -124,7 +125,18 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
               path: '/product/:slug',
               builder: (context, state) => ProductDetailScreen(
-                  slug: state.pathParameters['slug'] ?? '')),
+                    slug: state.pathParameters['slug'] ?? '',
+                    entitlementId: state.uri.queryParameters['entitlement'] ??
+                        state.uri.queryParameters['entitlement_id'],
+                    campaignItemId: int.tryParse(
+                        state.uri.queryParameters['campaign_item'] ??
+                            state.uri.queryParameters['campaign_item_id'] ??
+                            ''),
+                  )),
+          GoRoute(
+              path: '/drops/claim/:token',
+              builder: (context, state) => DropClaimScreen(
+                  entitlementId: state.pathParameters['token'] ?? '')),
           GoRoute(
               path: '/campaigns/:slug',
               builder: (context, state) => CampaignDetailScreen(
@@ -223,7 +235,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
               path: '/admin/product/:slug',
               builder: (context, state) => ProductDetailScreen(
-                  slug: state.pathParameters['slug'] ?? '')),
+                    slug: state.pathParameters['slug'] ?? '',
+                    entitlementId: state.uri.queryParameters['entitlement'] ??
+                        state.uri.queryParameters['entitlement_id'],
+                    campaignItemId: int.tryParse(
+                        state.uri.queryParameters['campaign_item'] ??
+                            state.uri.queryParameters['campaign_item_id'] ??
+                            ''),
+                  )),
           GoRoute(
               path: '/admin/cart',
               builder: (context, state) => const CartScreen()),
@@ -309,6 +328,7 @@ class RouterNotifier extends ChangeNotifier {
       '/orders',
       '/my-sctcg',
       '/trade-in',
+      '/drops',
       '/settings',
       '/admin'
     ];

@@ -103,7 +103,7 @@ class _CampaignPageViewState extends State<_CampaignPageView> {
             Positioned(
               left: 0,
               right: 0,
-              bottom: 92,
+              top: 14,
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -142,75 +142,69 @@ class _CampaignSlide extends StatelessWidget {
     final ctaLabel = campaign.ctaLabel.isEmpty ? 'Shop Now' : campaign.ctaLabel;
 
     return Material(
-      color: Colors.white,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+      color: AppColors.pkmnText,
+      child: Stack(
+        fit: StackFit.expand,
         children: [
-          Expanded(
-            child: InkWell(
-              onTap: () => context.go('/campaigns/${campaign.slug}'),
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  PkNetworkImage(
+          InkWell(
+            onTap: () => context.go('/campaigns/${campaign.slug}'),
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                Opacity(
+                  opacity: 0.55,
+                  child: PkNetworkImage(
                     imageUrl: campaign.heroImageUrl,
                     semanticLabel: campaign.title,
                     fit: BoxFit.cover,
                     padding: EdgeInsets.zero,
-                    backgroundColor: const Color(0xFFEEF2F6),
+                    backgroundColor: AppColors.pkmnText,
                   ),
-                  ColoredBox(color: Colors.white.withValues(alpha: 0.78)),
-                  Padding(
-                    padding: const EdgeInsets.all(18),
-                    child: PkNetworkImage(
-                      imageUrl: campaign.heroImageUrl,
-                      semanticLabel: campaign.title,
-                      fit: BoxFit.contain,
-                      padding: EdgeInsets.zero,
-                      backgroundColor: Colors.transparent,
+                ),
+                DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: RadialGradient(
+                      center: const Alignment(0.35, -0.25),
+                      radius: 1.2,
+                      colors: [
+                        Colors.white.withValues(alpha: 0.14),
+                        Colors.black.withValues(alpha: 0.18),
+                        Colors.black.withValues(alpha: 0.82),
+                      ],
                     ),
                   ),
-                  Positioned(
-                    right: 16,
-                    bottom: 16,
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.62),
-                        borderRadius: BorderRadius.circular(99),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 8),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text('See post',
-                                style:
-                                    AppTextStyles.label(color: Colors.white)),
-                            const SizedBox(width: 6),
-                            const Icon(Icons.arrow_forward,
-                                size: 15, color: Colors.white),
-                          ],
-                        ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(18, 32, 18, 108),
+                  child: PkNetworkImage(
+                    imageUrl: campaign.heroImageUrl,
+                    semanticLabel: campaign.title,
+                    fit: BoxFit.contain,
+                    padding: EdgeInsets.zero,
+                    backgroundColor: Colors.transparent,
+                  ),
+                ),
+                Positioned.fill(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.bottomCenter,
+                        end: Alignment.topCenter,
+                        colors: [
+                          Colors.black.withValues(alpha: 0.88),
+                          Colors.black.withValues(alpha: 0.38),
+                          Colors.transparent,
+                        ],
+                        stops: const [0, 0.46, 1],
                       ),
                     ),
                   ),
-                ],
-              ),
-            ),
-          ),
-          DecoratedBox(
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              border: Border(
-                  top: BorderSide(color: AppColors.pkmnYellow, width: 4)),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  final compact = constraints.maxWidth < 430;
-                  final titleBlock = Column(
+                ),
+                Positioned(
+                  left: 18,
+                  right: 128,
+                  bottom: 18,
+                  child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -218,7 +212,8 @@ class _CampaignSlide extends StatelessWidget {
                         campaign.title,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: AppTextStyles.heading(size: 19),
+                        style: AppTextStyles.heading(
+                            size: 21, color: Colors.white),
                       ),
                       if (campaign.subtitle.trim().isNotEmpty) ...[
                         const SizedBox(height: 5),
@@ -226,43 +221,29 @@ class _CampaignSlide extends StatelessWidget {
                           campaign.subtitle,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
-                          style: AppTextStyles.body(size: 12),
+                          style: AppTextStyles.body(
+                              size: 12, color: Colors.white70),
                         ),
                       ],
                     ],
-                  );
-                  final ctaButton = PkButton(
-                    label: ctaLabel,
-                    variant: PkButtonVariant.accent,
-                    expand: compact,
-                    onPressed: ctaUrl == null
-                        ? null
-                        : () => openCampaignUri(context, campaign.ctaUrl),
-                  );
-
-                  if (compact) {
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        titleBlock,
-                        const SizedBox(height: 12),
-                        ctaButton,
-                      ],
-                    );
-                  }
-
-                  return Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      Expanded(child: titleBlock),
-                      const SizedBox(width: 12),
-                      ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 180),
-                        child: ctaButton,
-                      ),
-                    ],
-                  );
-                },
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Positioned(
+            right: 16,
+            bottom: 18,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 118),
+              child: PkButton(
+                label: ctaUrl == null ? 'See Post' : ctaLabel,
+                variant: ctaUrl == null
+                    ? PkButtonVariant.secondary
+                    : PkButtonVariant.accent,
+                onPressed: ctaUrl == null
+                    ? () => context.go('/campaigns/${campaign.slug}')
+                    : () => openCampaignUri(context, campaign.ctaUrl),
               ),
             ),
           ),

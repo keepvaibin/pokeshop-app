@@ -137,14 +137,12 @@ class CartScreen extends ConsumerWidget {
                                   ),
                                   const SizedBox(height: 6),
                                   GestureDetector(
-                                    onTap: () =>
-                                        controller.remove(line.item.id),
+                                    onTap: () => controller.remove(line.item),
                                     child: Row(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
                                         const Icon(Icons.delete_outline,
-                                            size: 14,
-                                            color: AppColors.pkmnRed),
+                                            size: 14, color: AppColors.pkmnRed),
                                         const SizedBox(width: 3),
                                         Text('Remove',
                                             style: AppTextStyles.body(

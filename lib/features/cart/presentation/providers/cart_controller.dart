@@ -22,9 +22,9 @@ class CartState {
 
   int get totalQuantity => lines.fold(0, (sum, line) => sum + line.quantity);
   double get subtotal => lines.fold(0, (sum, line) => sum + line.subtotal);
-  int quantityFor(int itemId) {
+  int quantityFor(ProductItem item) {
     for (final line in lines) {
-      if (line.item.id == itemId) return line.quantity;
+      if (line.item.cartKey == item.cartKey) return line.quantity;
     }
     return 0;
   }
@@ -75,15 +75,17 @@ class CartController extends StateNotifier<CartState> {
   }
 
   Future<CartChangeResult> add(ProductItem item, {int quantity = 1}) async {
-    final existing =
-        state.lines.where((line) => line.item.id == item.id).firstOrNull;
+    final existing = state.lines
+        .where((line) => line.item.cartKey == item.cartKey)
+        .firstOrNull;
     return setQuantity(item, (existing?.quantity ?? 0) + quantity);
   }
 
   Future<CartChangeResult> setQuantity(ProductItem item, int quantity) async {
     if (quantity <= 0) {
-      final next =
-          state.lines.where((line) => line.item.id != item.id).toList();
+      final next = state.lines
+          .where((line) => line.item.cartKey != item.cartKey)
+          .toList();
       state = state.copyWith(lines: next, clearError: true);
       await _persist();
       return CartChangeResult.updated;
@@ -100,14 +102,15 @@ class CartController extends StateNotifier<CartState> {
       return CartChangeResult.limited;
     }
 
-    final serverAllowed = await _serverAllows(item.id, quantity);
+    final serverAllowed = await _serverAllows(item, quantity);
     if (!serverAllowed) {
       state = state.copyWith(errorMessage: limitMessage);
       return CartChangeResult.limited;
     }
 
-    final existing =
-        state.lines.where((line) => line.item.id == item.id).firstOrNull;
+    final existing = state.lines
+        .where((line) => line.item.cartKey == item.cartKey)
+        .firstOrNull;
     final lines = [...state.lines];
     if (existing == null) {
       lines.add(CartLine(item: item, quantity: quantity));
@@ -120,14 +123,16 @@ class CartController extends StateNotifier<CartState> {
     return CartChangeResult.updated;
   }
 
-  Future<CartChangeResult> updateQuantity(int itemId, int quantity) async {
-    final existing =
-        state.lines.where((line) => line.item.id == itemId).firstOrNull;
+  Future<CartChangeResult> updateQuantity(
+      ProductItem item, int quantity) async {
+    final existing = state.lines
+        .where((line) => line.item.cartKey == item.cartKey)
+        .firstOrNull;
     if (existing == null) return CartChangeResult.updated;
     return setQuantity(existing.item, quantity);
   }
 
-  Future<CartChangeResult> remove(int itemId) => updateQuantity(itemId, 0);
+  Future<CartChangeResult> remove(ProductItem item) => updateQuantity(item, 0);
 
   Future<void> clear() async {
     state = state.copyWith(lines: const [], clearError: true);
@@ -150,11 +155,18 @@ class CartController extends StateNotifier<CartState> {
     }
   }
 
-  Future<bool> _serverAllows(int itemId, int quantity) async {
+  Future<bool> _serverAllows(ProductItem item, int quantity) async {
     try {
       final response = await _dio.post<Map<String, dynamic>>(
         ApiEndpoints.cartCheck,
-        data: {'item_id': itemId, 'quantity': quantity},
+        data: {
+          'item_id': item.id,
+          'quantity': quantity,
+          if (item.myCampaignItemId != null)
+            'campaign_item_id': item.myCampaignItemId,
+          if (item.myEntitlementId != null)
+            'entitlement_id': item.myEntitlementId,
+        },
       );
       return asBool(response.data?['allowed'], fallback: true);
     } on DioException {
