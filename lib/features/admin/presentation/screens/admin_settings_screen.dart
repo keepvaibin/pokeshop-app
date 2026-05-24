@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../../app/shell/app_shell.dart';
 import '../../../../core/models/api_models.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/app_decorations.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/widgets/pk_button.dart';
 import '../../../../core/widgets/pk_card.dart';
@@ -29,7 +30,7 @@ class _AdminSettingsScreenState extends ConsumerState<AdminSettingsScreen> {
   final _tradeCreditController = TextEditingController();
   final _tradeCashController = TextEditingController();
   final _salesTaxController = TextEditingController();
-  final _minimumAppVersionController = TextEditingController();
+  String? _minimumAppVersion;
   final _maxTradeCardsController = TextEditingController();
   final _webhookController = TextEditingController();
   final _ucscInviteController = TextEditingController();
@@ -70,7 +71,6 @@ class _AdminSettingsScreenState extends ConsumerState<AdminSettingsScreen> {
     _tradeCreditController.dispose();
     _tradeCashController.dispose();
     _salesTaxController.dispose();
-    _minimumAppVersionController.dispose();
     _maxTradeCardsController.dispose();
     _webhookController.dispose();
     _ucscInviteController.dispose();
@@ -195,12 +195,7 @@ class _AdminSettingsScreenState extends ConsumerState<AdminSettingsScreen> {
             keyboardType: TextInputType.number,
           ),
           const SizedBox(height: 20),
-          PkInput(
-            controller: _minimumAppVersionController,
-            label: 'Minimum App Version',
-            hint: 'e.g. 0.1.8  (leave as 0.0.0 to disable)',
-            keyboardType: TextInputType.text,
-          ),
+          _buildMinVersionDropdown(settings),
           const SizedBox(height: 20),
           PkInput(
             controller: _maxTradeCardsController,
@@ -295,6 +290,45 @@ class _AdminSettingsScreenState extends ConsumerState<AdminSettingsScreen> {
             expand: true,
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildMinVersionDropdown(StoreSettings settings) {
+    // Build option list: always include '0.0.0' (= disabled) plus all known versions,
+    // sorted newest-first. Also ensure the current saved value is always present.
+    final known = [...settings.knownAppVersions];
+    if (!known.contains('0.0.0')) known.insert(0, '0.0.0');
+    if (_minimumAppVersion != null && !known.contains(_minimumAppVersion)) {
+      known.add(_minimumAppVersion!);
+    }
+    known.sort((a, b) {
+      if (a == '0.0.0') return -1;
+      if (b == '0.0.0') return 1;
+      final ap = a.split('.').map((p) => int.tryParse(p) ?? 0).toList();
+      final bp = b.split('.').map((p) => int.tryParse(p) ?? 0).toList();
+      for (int i = 0; i < 3; i++) {
+        final diff = (bp.length > i ? bp[i] : 0) - (ap.length > i ? ap[i] : 0);
+        if (diff != 0) return diff;
+      }
+      return 0;
+    });
+
+    final current = _minimumAppVersion ?? '0.0.0';
+    return InputDecorator(
+      decoration: AppDecorations.inputDecoration(label: 'Minimum App Version'),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: known.contains(current) ? current : known.first,
+          isDense: true,
+          items: known
+              .map((v) => DropdownMenuItem(
+                    value: v,
+                    child: Text(v == '0.0.0' ? '0.0.0  (disabled)' : v),
+                  ))
+              .toList(),
+          onChanged: (v) => setState(() => _minimumAppVersion = v),
+        ),
       ),
     );
   }
@@ -644,7 +678,7 @@ class _AdminSettingsScreenState extends ConsumerState<AdminSettingsScreen> {
         settings.tradeCreditPercentage.toStringAsFixed(0);
     _tradeCashController.text = settings.tradeCashPercentage.toStringAsFixed(0);
     _salesTaxController.text = settings.salesTaxRatePercent.toStringAsFixed(2);
-    _minimumAppVersionController.text = settings.minimumAppVersion;
+    _minimumAppVersion = settings.minimumAppVersion;
     _maxTradeCardsController.text = '${settings.maxTradeCardsPerOrder}';
     _webhookController.text = settings.discordWebhookUrl;
     _ucscInviteController.text = settings.ucscDiscordInvite ?? '';
@@ -679,9 +713,9 @@ class _AdminSettingsScreenState extends ConsumerState<AdminSettingsScreen> {
             _doubleValue(_tradeCreditController.text, 85),
         'trade_cash_percentage': _doubleValue(_tradeCashController.text, 65),
         'sales_tax_rate_percent': _doubleValue(_salesTaxController.text, 9.25),
-        'minimum_app_version': _minimumAppVersionController.text.trim().isEmpty
+        'minimum_app_version': (_minimumAppVersion ?? '').trim().isEmpty
             ? '0.0.0'
-            : _minimumAppVersionController.text.trim(),
+            : _minimumAppVersion!.trim(),
         'max_trade_cards_per_order':
             _intValue(_maxTradeCardsController.text, 5),
         'discord_webhook_url': _webhookController.text.trim(),

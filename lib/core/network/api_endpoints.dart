@@ -24,6 +24,7 @@ abstract final class ApiEndpoints {
   static const String subcategories = '/inventory/subcategories/';
   static const String homepageSections = '/inventory/homepage-sections/';
   static const String settings = '/inventory/settings/';
+  static const String registerAppVersion = '/inventory/settings/register-app-version/';
   static const String recurringTimeslots = '/inventory/recurring-timeslots/';
   static const String accessCodes = '/inventory/access-codes/';
   static const String promoBanners = '/inventory/promo-banners/';

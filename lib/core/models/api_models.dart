@@ -389,6 +389,7 @@ class StoreSettings {
     this.tradeCashPercentage = 65,
     this.salesTaxRatePercent = 9.25,
     this.minimumAppVersion = '0.0.0',
+    this.knownAppVersions = const [],
     this.maxTradeCardsPerOrder = 5,
     this.discordWebhookUrl = '',
     this.payVenmo = true,
@@ -414,6 +415,7 @@ class StoreSettings {
   final double tradeCashPercentage;
   final double salesTaxRatePercent;
   final String minimumAppVersion;
+  final List<String> knownAppVersions;
   final int maxTradeCardsPerOrder;
   final String discordWebhookUrl;
   final bool payVenmo;
@@ -444,6 +446,7 @@ class StoreSettings {
       salesTaxRatePercent:
           asDouble(json['sales_tax_rate_percent'], fallback: 9.25),
       minimumAppVersion: asString(json['minimum_app_version'], fallback: '0.0.0'),
+      knownAppVersions: _asStringList(json['known_app_versions']),
       maxTradeCardsPerOrder:
           asInt(json['max_trade_cards_per_order'], fallback: 5),
       discordWebhookUrl: asString(json['discord_webhook_url']),

@@ -133,6 +133,19 @@ class ShopRepository {
     }
   }
 
+  /// Fire-and-forget: registers the current app version with the backend so
+  /// it appears in the admin minimum-version dropdown.
+  Future<void> registerAppVersion(String version) async {
+    try {
+      await _dio.post<void>(
+        ApiEndpoints.registerAppVersion,
+        data: {'version': version},
+      );
+    } catch (_) {
+      // Non-critical — ignore all errors.
+    }
+  }
+
   Future<List<HomepageSection>> getHomepageSections() async {
     try {
       final response = await _dio.get<dynamic>(ApiEndpoints.homepageSections);

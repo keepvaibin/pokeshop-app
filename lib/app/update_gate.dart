@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -40,6 +42,8 @@ class _UpdateGateState extends ConsumerState<UpdateGate> {
         try {
           final info = await PackageInfo.fromPlatform();
           if (!ctx.mounted || _dialogShown) return;
+          // Register version in background so it appears in the admin dropdown.
+          unawaited(ref.read(shopRepositoryProvider).registerAppVersion(info.version));
           if (!_isVersionSufficient(info.version, minimum)) {
             _dialogShown = true;
             _showUpdateDialog(ctx);
