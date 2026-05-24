@@ -29,6 +29,7 @@ class _AdminSettingsScreenState extends ConsumerState<AdminSettingsScreen> {
   final _tradeCreditController = TextEditingController();
   final _tradeCashController = TextEditingController();
   final _salesTaxController = TextEditingController();
+  final _minimumAppVersionController = TextEditingController();
   final _maxTradeCardsController = TextEditingController();
   final _webhookController = TextEditingController();
   final _ucscInviteController = TextEditingController();
@@ -69,6 +70,7 @@ class _AdminSettingsScreenState extends ConsumerState<AdminSettingsScreen> {
     _tradeCreditController.dispose();
     _tradeCashController.dispose();
     _salesTaxController.dispose();
+    _minimumAppVersionController.dispose();
     _maxTradeCardsController.dispose();
     _webhookController.dispose();
     _ucscInviteController.dispose();
@@ -191,6 +193,13 @@ class _AdminSettingsScreenState extends ConsumerState<AdminSettingsScreen> {
             controller: _salesTaxController,
             label: 'Processing Fee %',
             keyboardType: TextInputType.number,
+          ),
+          const SizedBox(height: 20),
+          PkInput(
+            controller: _minimumAppVersionController,
+            label: 'Minimum App Version',
+            hint: 'e.g. 0.1.8  (leave as 0.0.0 to disable)',
+            keyboardType: TextInputType.text,
           ),
           const SizedBox(height: 20),
           PkInput(
@@ -608,6 +617,7 @@ class _AdminSettingsScreenState extends ConsumerState<AdminSettingsScreen> {
       settings.tradeCreditPercentage,
       settings.tradeCashPercentage,
       settings.salesTaxRatePercent,
+      settings.minimumAppVersion,
       settings.maxTradeCardsPerOrder,
       settings.discordWebhookUrl,
       settings.ucscDiscordInvite,
@@ -634,6 +644,7 @@ class _AdminSettingsScreenState extends ConsumerState<AdminSettingsScreen> {
         settings.tradeCreditPercentage.toStringAsFixed(0);
     _tradeCashController.text = settings.tradeCashPercentage.toStringAsFixed(0);
     _salesTaxController.text = settings.salesTaxRatePercent.toStringAsFixed(2);
+    _minimumAppVersionController.text = settings.minimumAppVersion;
     _maxTradeCardsController.text = '${settings.maxTradeCardsPerOrder}';
     _webhookController.text = settings.discordWebhookUrl;
     _ucscInviteController.text = settings.ucscDiscordInvite ?? '';
@@ -668,6 +679,9 @@ class _AdminSettingsScreenState extends ConsumerState<AdminSettingsScreen> {
             _doubleValue(_tradeCreditController.text, 85),
         'trade_cash_percentage': _doubleValue(_tradeCashController.text, 65),
         'sales_tax_rate_percent': _doubleValue(_salesTaxController.text, 9.25),
+        'minimum_app_version': _minimumAppVersionController.text.trim().isEmpty
+            ? '0.0.0'
+            : _minimumAppVersionController.text.trim(),
         'max_trade_cards_per_order':
             _intValue(_maxTradeCardsController.text, 5),
         'discord_webhook_url': _webhookController.text.trim(),

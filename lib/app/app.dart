@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/theme/app_theme.dart';
 import 'router/app_router.dart';
+import 'update_gate.dart';
 
 class PokeshopApp extends ConsumerStatefulWidget {
   const PokeshopApp({super.key});
@@ -59,6 +60,8 @@ class _PokeshopAppState extends ConsumerState<PokeshopApp> {
       darkTheme: AppTheme.light(),
       themeMode: ThemeMode.light,
       routerConfig: router,
+      builder: (context, child) =>
+          UpdateGate(child: child ?? const SizedBox()),
     );
   }
 }
