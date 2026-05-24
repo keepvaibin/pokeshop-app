@@ -66,7 +66,7 @@ class CartScreen extends ConsumerWidget {
                                   mainAxisAlignment:
                                       MainAxisAlignment.spaceBetween,
                                   children: [
-                                    Text('Subtotal before tax',
+                                    Text('Subtotal',
                                         style: AppTextStyles.heading(size: 18)),
                                     Text(formatMoney(tax.preTaxSubtotal),
                                         style: AppTextStyles.heading(
@@ -79,7 +79,7 @@ class CartScreen extends ConsumerWidget {
                                   mainAxisAlignment:
                                       MainAxisAlignment.spaceBetween,
                                   children: [
-                                    Text('Sales tax',
+                                    Text('Processing fee',
                                         style: AppTextStyles.body(size: 13)),
                                     Text(formatMoney(tax.salesTax),
                                         style: AppTextStyles.body(size: 13)),
@@ -90,7 +90,7 @@ class CartScreen extends ConsumerWidget {
                                   mainAxisAlignment:
                                       MainAxisAlignment.spaceBetween,
                                   children: [
-                                    Text('Total after tax',
+                                    Text('Total',
                                         style: AppTextStyles.heading(size: 15)),
                                     Text(formatMoney(cart.subtotal),
                                         style: AppTextStyles.heading(size: 15)),

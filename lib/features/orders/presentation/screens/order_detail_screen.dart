@@ -379,12 +379,12 @@ class _PaymentLedger extends StatelessWidget {
                   value: '-${_money(order.discountApplied)}'),
             ],
             _LedgerRow(
-                label: 'Subtotal before tax',
+                label: 'Subtotal',
                 value: _money(order.taxSummary!.preTaxSubtotal)),
             _LedgerRow(
-                label: 'Sales tax', value: _money(order.taxSummary!.salesTax)),
+                label: 'Processing fee', value: _money(order.taxSummary!.salesTax)),
             _LedgerRow(
-                label: 'Total after tax',
+                label: 'Total',
                 value: _money(order.taxSummary!.grossTotal)),
           ] else ...[
             _LedgerRow(label: 'Subtotal', value: _money(order.total)),
@@ -727,9 +727,9 @@ Future<Uint8List> _buildInvoicePdf(
             _pdfLedgerRow('Discount', -order.discountApplied),
           ],
           _pdfLedgerRow(
-              'Subtotal before tax', order.taxSummary!.preTaxSubtotal),
-          _pdfLedgerRow('Sales tax', order.taxSummary!.salesTax),
-          _pdfLedgerRow('Total after tax', order.taxSummary!.grossTotal),
+              'Subtotal', order.taxSummary!.preTaxSubtotal),
+          _pdfLedgerRow('Processing fee', order.taxSummary!.salesTax),
+          _pdfLedgerRow('Total', order.taxSummary!.grossTotal),
         ] else ...[
           _pdfLedgerRow('Subtotal', order.total),
           if (order.discountApplied > 0)

@@ -512,7 +512,7 @@ class _OptionText extends StatelessWidget {
         Text(
             option.price <= 0
                 ? 'FREE'
-                : '${formatMoney(option.taxDisplay?.preTaxSubtotal ?? TaxDisplay.split(option.price).preTaxSubtotal)} + tax',
+                : formatMoney(option.taxDisplay?.preTaxSubtotal ?? TaxDisplay.split(option.price).preTaxSubtotal),
             style:
                 AppTextStyles.heading(size: 14, color: AppColors.pkmnBlueDark)),
         if (option.perWinnerLimit != null) ...[

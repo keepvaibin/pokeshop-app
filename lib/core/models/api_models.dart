@@ -150,7 +150,7 @@ class ProductItem {
   TaxDisplay get resolvedTaxDisplay => taxDisplay ?? TaxDisplay.split(price);
   String get customerPriceLabel => price <= 0
       ? 'FREE'
-      : '${formatMoney(resolvedTaxDisplay.preTaxSubtotal)} + tax';
+      : formatMoney(resolvedTaxDisplay.preTaxSubtotal);
 
   int? get localQuantityLimit {
     final candidates = <int>[

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_html/flutter_html.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../../core/models/api_models.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/widgets/cart_icon_button.dart';
@@ -82,12 +81,7 @@ class ProductDetailScreen extends ConsumerWidget {
                                     style: AppTextStyles.heading(
                                         size: 22,
                                         color: AppColors.pkmnBlueDark)),
-                                if (item.price > 0) ...[
-                                  const SizedBox(height: 3),
-                                  Text('Final total ${formatMoney(item.price)}',
-                                      style: AppTextStyles.label(
-                                          color: AppColors.pkmnGrayDark)),
-                                ],
+
                                 const SizedBox(height: 12),
                                 Text(item.inStock ? 'Available' : 'Sold out',
                                     style: AppTextStyles.label(

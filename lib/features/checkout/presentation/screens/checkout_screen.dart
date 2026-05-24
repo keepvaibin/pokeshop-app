@@ -190,7 +190,7 @@ class _OrderSummary extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('Subtotal before tax',
+              Text('Subtotal',
                   style: AppTextStyles.heading(size: 18)),
               Text(formatMoney(tax.preTaxSubtotal),
                   style: AppTextStyles.heading(
@@ -205,9 +205,9 @@ class _OrderSummary extends StatelessWidget {
           ],
           const SizedBox(height: 6),
           _CheckoutLedgerRow(
-              label: 'Sales tax', value: formatMoney(tax.salesTax)),
+              label: 'Processing fee', value: formatMoney(tax.salesTax)),
           _CheckoutLedgerRow(
-              label: 'Total after tax',
+              label: 'Total',
               value: formatMoney(discountedTotal),
               emphasized: true),
         ],

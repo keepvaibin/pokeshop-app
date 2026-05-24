@@ -189,7 +189,7 @@ class _AdminSettingsScreenState extends ConsumerState<AdminSettingsScreen> {
           const SizedBox(height: 20),
           PkInput(
             controller: _salesTaxController,
-            label: 'Sales Tax %',
+            label: 'Processing Fee %',
             keyboardType: TextInputType.number,
           ),
           const SizedBox(height: 20),
